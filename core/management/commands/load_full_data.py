@@ -62,8 +62,24 @@ class Command(BaseCommand):
 
         self.stdout.write(f"Loading full data from {fixture_path}...")
 
+        # Read the fixture with tolerant encoding.
+        # The current full_data.json was generated on Windows and uses cp1252/latin-1.
+        try:
+            with open(fixture_path, encoding="utf-8") as f:
+                fixture_content = f.read()
+        except UnicodeDecodeError:
+            self.stdout.write(
+                self.style.WARNING(
+                    "UTF-8 decoding failed. Using latin-1 fallback "
+                    "(common when the JSON was created on Windows)..."
+                )
+            )
+            with open(fixture_path, encoding="latin-1") as f:
+                fixture_content = f.read()
+
+        import io
         with transaction.atomic():
-            call_command("loaddata", str(fixture_path), verbosity=1)
+            call_command("loaddata", io.StringIO(fixture_content), verbosity=1)
 
         self.stdout.write(self.style.SUCCESS("Full data loaded successfully."))
 
