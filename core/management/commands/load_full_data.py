@@ -77,9 +77,21 @@ class Command(BaseCommand):
             with open(fixture_path, encoding="latin-1") as f:
                 fixture_content = f.read()
 
-        import io
-        with transaction.atomic():
-            call_command("loaddata", io.StringIO(fixture_content), verbosity=1)
+        # We write to a temp UTF-8 file because loaddata has issues when
+        # passed StringIO objects directly (it misinterprets them as format names).
+        import tempfile
+
+        with tempfile.NamedTemporaryFile(
+            mode="w", encoding="utf-8", suffix=".json", delete=False
+        ) as tmp:
+            tmp.write(fixture_content)
+            tmp_path = tmp.name
+
+        try:
+            with transaction.atomic():
+                call_command("loaddata", tmp_path, verbosity=1)
+        finally:
+            os.unlink(tmp_path)
 
         self.stdout.write(self.style.SUCCESS("Full data loaded successfully."))
 
