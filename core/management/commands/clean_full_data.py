@@ -1,29 +1,29 @@
 """
 Management command: clean_full_data
 
-Cleans a full_data.json fixture by removing test/draft data,
-keeping only OFICIAL organogramas and their related records.
+Aggressively cleans a full_data.json fixture:
 
-This is the recommended way to prepare a clean version of the
-historical data for distribution in the repository.
+- Keeps only OFICIAL organogramas (status=OFICIAL)
+- Removes all test/dummy Campi (names containing: test, teste, demo, dummy, etc.)
+- Removes non-vigente regimentos
+- Removes test regimentos (name containing "test")
+- Removes Units, Solicitações, and other objects linked to removed data
 
-Usage:
-    python manage.py clean_full_data --input data/full_data.json --output data/full_data.json --force
-
-After running, the output file will contain only official organogramas,
-their units, approved solicitações, official regimentos, etc.
-Test regimentos (name containing "test") are also removed.
+This produces a clean fixture suitable for distribution.
 """
 
 import json
-import os
 from pathlib import Path
 
 from django.core.management.base import BaseCommand
 
 
 class Command(BaseCommand):
-    help = "Clean a full_data.json fixture: keep only OFICIAL organogramas and remove test/draft data."
+    help = (
+        "Aggressively clean a full_data.json fixture: "
+        "remove test Campi, non-OFICIAL organogramas, non-vigente regimentos, "
+        "test regimentos, and all related draft/test data."
+    )
 
     def add_arguments(self, parser):
         parser.add_argument(
@@ -67,19 +67,70 @@ class Command(BaseCommand):
 
         original_count = len(data)
 
-        # Pass 1: collect PKs of official organogramas
-        oficial_organograma_pks = set()
+        # ============================================
+        # AGGRESSIVE CLEANING - Multiple passes
+        # ============================================
+
+        # Pass 1: Identify test Campi
+        test_campus_patterns = ["test", "teste", "demo", "dummy", "exemplo", "sample"]
+        test_campus_pks = set()
+
+        for obj in data:
+            if obj.get("model") == "core.campus":
+                fields = obj.get("fields", {})
+                nome = (fields.get("nome") or "").lower()
+                sigla = (fields.get("sigla") or "").lower()
+                if any(p in nome or p in sigla for p in test_campus_patterns):
+                    pk = obj.get("pk")
+                    if pk is not None:
+                        test_campus_pks.add(pk)
+
+        self.stdout.write(f"Detected {len(test_campus_pks)} test/dummy Campi to remove.")
+
+        # Pass 2: Collect kept Campi (non-test)
+        kept_campus_pks = set()
+        for obj in data:
+            if obj.get("model") == "core.campus":
+                pk = obj.get("pk")
+                if pk is not None and pk not in test_campus_pks:
+                    kept_campus_pks.add(pk)
+
+        # Pass 3: Collect kept Organogramas (OFICIAL + belonging to kept Campi)
+        kept_organograma_pks = set()
         for obj in data:
             if obj.get("model") == "core.organograma":
                 fields = obj.get("fields", {})
-                if fields.get("status") == "OFICIAL":
-                    pk = obj.get("pk")
-                    if pk is not None:
-                        oficial_organograma_pks.add(pk)
+                pk = obj.get("pk")
+                campus_ref = fields.get("campus")
+                status = fields.get("status")
 
-        self.stdout.write(f"Found {len(oficial_organograma_pks)} OFICIAL organogramas.")
+                if pk is not None:
+                    if status == "OFICIAL" and campus_ref in kept_campus_pks:
+                        kept_organograma_pks.add(pk)
 
-        # Pass 2: filter objects
+        self.stdout.write(f"Keeping {len(kept_organograma_pks)} official organogramas.")
+
+        # Pass 4: Collect kept Regimentos (vigente + not test name + from kept campi)
+        kept_regimento_pks = set()
+        for obj in data:
+            if obj.get("model") == "core.regimentocampus":
+                fields = obj.get("fields", {})
+                pk = obj.get("pk")
+                campus_ref = fields.get("campus")
+                nome = (fields.get("nome") or "").lower()
+                vigente = fields.get("vigente", False)
+
+                if pk is not None:
+                    if ("test" not in nome and
+                        vigente is True and
+                        campus_ref in kept_campus_pks):
+                        kept_regimento_pks.add(pk)
+
+        self.stdout.write(f"Keeping {len(kept_regimento_pks)} vigente official regimentos.")
+
+        # ============================================
+        # Final filtering pass
+        # ============================================
         cleaned = []
         removed_by_model = {}
 
@@ -91,37 +142,65 @@ class Command(BaseCommand):
             keep = True
             reason = ""
 
-            if model == "core.organograma":
-                if fields.get("status") != "OFICIAL":
+            if model == "core.campus":
+                if pk in test_campus_pks:
                     keep = False
-                    reason = f"status={fields.get('status')}"
+                    reason = "test/dummy campus"
+
+            elif model == "core.organograma":
+                campus_ref = fields.get("campus")
+                status = fields.get("status")
+                if status != "OFICIAL" or campus_ref not in kept_campus_pks:
+                    keep = False
+                    reason = f"non-OFICIAL or from test campus (status={status})"
 
             elif model == "core.unit":
-                # Keep only units that belong to an official organograma
                 orga_ref = fields.get("organograma")
-                if orga_ref and orga_ref not in oficial_organograma_pks:
+                if orga_ref and orga_ref not in kept_organograma_pks:
                     keep = False
-                    reason = "belongs to non-OFICIAL organograma"
+                    reason = "belongs to non-official organograma"
 
             elif model == "core.solicitacaoalteracao":
                 status = fields.get("status")
                 if status in ("RASCUNHO", "DEVOLVIDO_CORRECAO"):
                     keep = False
-                    reason = f"status={status}"
+                    reason = f"draft status={status}"
                 else:
-                    # Also drop if linked to non-official organogramas
                     orig = fields.get("organograma_original")
                     prop = fields.get("organograma_proposto")
-                    if (orig and orig not in oficial_organograma_pks) or \
-                       (prop and prop not in oficial_organograma_pks):
+                    if (orig and orig not in kept_organograma_pks) or \
+                       (prop and prop not in kept_organograma_pks):
                         keep = False
-                        reason = "linked to non-OFICIAL organograma"
+                        reason = "linked to non-official organograma"
 
             elif model == "core.regimentocampus":
+                campus_ref = fields.get("campus")
                 nome = (fields.get("nome") or "").lower()
-                if "test" in nome:
+                vigente = fields.get("vigente", False)
+
+                if campus_ref not in kept_campus_pks:
+                    keep = False
+                    reason = "belongs to test campus"
+                elif "test" in nome:
                     keep = False
                     reason = "test regimento"
+                elif not vigente:
+                    keep = False
+                    reason = "non-vigente regimento"
+
+            # Future-proof: also drop any objects pointing to removed campuses/organogramas
+            if keep:
+                for fk_field in ("campus", "organograma", "organograma_original", "organograma_proposto"):
+                    ref = fields.get(fk_field)
+                    if ref is not None:
+                        if fk_field == "campus" and ref not in kept_campus_pks:
+                            keep = False
+                            reason = "references removed test campus"
+                            break
+                        if fk_field in ("organograma", "organograma_original", "organograma_proposto") and ref not in kept_organograma_pks:
+                            keep = False
+                            reason = "references removed non-official organograma"
+                            break
 
             if keep:
                 cleaned.append(obj)
@@ -166,5 +245,8 @@ class Command(BaseCommand):
             self.style.SUCCESS(f"\nCleaned fixture written to: {output_path}")
         )
         self.stdout.write(
-            "You can now commit this file (or replace data/full_data.json with it)."
+            "The fixture is now much cleaner (only official organogramas + clean related data)."
+        )
+        self.stdout.write(
+            "You can commit/replace data/full_data.json with this file."
         )
