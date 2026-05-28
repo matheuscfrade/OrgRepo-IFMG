@@ -1,0 +1,1081 @@
+{% extends 'base.html' %}
+
+{% block title %}Organograma - {{ organograma.campus.nome }} | OrgRepo{% endblock %}
+{% block page_title %}Modelagem Espacial - {{ organograma.campus.nome }}{% endblock %}
+
+{% block extra_css %}
+<style>
+    .chart-panel {
+        background: white;
+        border-radius: 12px;
+        box-shadow: var(--card-shadow);
+        padding: 0;
+        overflow: hidden;
+        height: calc(100vh - 125px);
+        min-height: 560px;
+        display: flex;
+        flex-direction: column;
+        position: relative;
+    }
+
+    .chart-header {
+        padding: 10px 30px;
+        background: #fdfdfd;
+        border-bottom: 1px solid #eee;
+        display: flex;
+        flex-direction: column;
+        gap: 8px;
+        z-index: 10;
+    }
+    
+    .chart-header-row {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        gap: 16px;
+        width: 100%;
+    }
+
+    .org-detail-nav {
+        margin-bottom: 8px;
+        display: flex;
+        gap: 14px;
+        flex-wrap: wrap;
+        font-size: 0.85rem;
+    }
+
+    .org-detail-nav a {
+        text-decoration: none;
+        color: #7f8c8d;
+        font-weight: 600;
+    }
+
+    .chart-alert {
+        width: 100%;
+        background: #fff3cd;
+        color: #856404;
+        padding: 8px 14px;
+        border-radius: 6px;
+        border: 1px solid #ffeeba;
+        font-size: 0.82rem;
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        box-sizing: border-box;
+        line-height: 1.25;
+    }
+
+    .chart-alert i {
+        font-size: 1rem;
+        flex: 0 0 auto;
+    }
+
+    .chart-title-block {
+        min-width: 0;
+        flex: 1;
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        flex-wrap: wrap;
+    }
+
+    .chart-title-line {
+        display: flex;
+        align-items: baseline;
+        gap: 12px;
+        flex-wrap: wrap;
+        flex: 0 1 auto;
+    }
+    
+    .chart-header h2 {
+        font-size: 1.05rem;
+        color: var(--text-color);
+        margin: 0;
+    }
+    .chart-header p {
+        font-size: 0.9rem;
+        color: #7f8c8d;
+    }
+
+    .chart-status {
+        font-size: 0.82rem;
+        color: #57606f;
+        white-space: nowrap;
+    }
+
+    .chart-header-tools {
+        display: flex;
+        gap: 8px;
+        align-items: center;
+        justify-content: flex-end;
+        flex-wrap: wrap;
+    }
+
+    .chart-header-tools .btn-primary,
+    .chart-header-tools button.btn-primary {
+        padding: 8px 12px;
+        min-height: 36px;
+        font-size: 0.86rem;
+        white-space: nowrap;
+    }
+
+    .doc-buttons {
+        display: flex;
+        gap: 8px;
+        flex-wrap: wrap;
+        margin-top: 0;
+    }
+
+    .chart-title-block details {
+        margin-top: 0 !important;
+    }
+
+    .chart-container-wrapper {
+        flex: 1;
+        background-color: #f8f9fa;
+        width: 100%;
+        height: 100%;
+        min-height: 0;
+    }
+
+    /* OrgChart Node Styles */
+    .node-content {
+        background-color: white;
+        border: 2px solid var(--if-green);
+        border-radius: 8px;
+        height: 100%;
+        box-shadow: 0 4px 6px rgba(0,0,0,0.1);
+        display: flex;
+        flex-direction: column;
+        overflow: hidden;
+    }
+
+    .node-header {
+        background-color: var(--if-green);
+        color: white;
+        padding: 10px;
+        text-align: center;
+        font-weight: 600;
+        font-size: 12px;
+        min-height: 45px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        line-height: 1.2;
+    }
+
+    .node-body {
+        padding: 12px;
+        text-align: center;
+        flex: 1;
+        display: flex;
+        flex-direction: column;
+        justify-content: center;
+    }
+
+    .node-role {
+        font-size: 13px;
+        color: #34495e;
+        font-weight: 500;
+        margin-bottom: 5px;
+    }
+    
+    .node-sigla-role {
+        font-size: 11px;
+        color: #7f8c8d;
+        background: #ecf0f1;
+        padding: 3px 6px;
+        border-radius: 4px;
+        display: inline-block;
+        margin: 0 auto;
+    }
+
+    .node-sigla-unidade {
+        font-weight: 700;
+        font-size: 15px;
+        color: var(--if-green);
+        margin-bottom: 5px;
+    }
+
+    .node-button-g {
+        opacity: 0 !important;
+        pointer-events: none !important;
+    }
+
+    .controls {
+        position: absolute;
+        bottom: 20px;
+        right: 20px;
+        display: flex;
+        gap: 10px;
+        z-index: 20;
+    }
+
+    .control-btn:hover { background: #fdfdfd; transform: translateY(-2px); box-shadow: 0 4px 8px rgba(0,0,0,0.15); color: var(--if-green); }
+
+    .chart-control-group {
+        position: absolute;
+        bottom: 20px;
+        right: 20px;
+        display: flex;
+        gap: 8px;
+        z-index: 1000;
+    }
+
+    .control-btn-center {
+        background: white;
+        border: 1px solid #ddd;
+        padding: 8px 12px;
+        border-radius: 6px;
+        box-shadow: 0 2px 5px rgba(0,0,0,0.1);
+        cursor: pointer;
+        z-index: 1000;
+        font-size: 0.85rem;
+        font-weight: 600;
+        color: #555;
+        transition: all 0.2s;
+    }
+    .control-btn-center:hover {
+        background: #f8f9fa;
+        transform: translateY(-2px);
+        box-shadow: 0 4px 8px rgba(0,0,0,0.15);
+        color: var(--if-green);
+    }
+
+    .org-chart-export-area:fullscreen {
+        background: #f8f9fa;
+        padding: 0;
+    }
+    .org-chart-export-area:fullscreen .chart-container-wrapper {
+        height: 100vh !important;
+    }
+    .org-chart-export-area:fullscreen .chart-control-group {
+        bottom: 24px;
+        right: 24px;
+    }
+
+    /* Document Buttons Styles */
+    .btn-doc {
+        display: inline-flex;
+        align-items: center;
+        gap: 7px;
+        padding: 5px 10px;
+        background: #f1f2f6;
+        color: #2f3542;
+        border-radius: 6px;
+        text-decoration: none !important;
+        font-size: 0.78rem;
+        font-weight: 600;
+        transition: all 0.2s;
+        border: 1px solid #dfe4ea;
+        box-shadow: 0 1px 3px rgba(0,0,0,0.05);
+        max-width: 230px;
+        min-height: 30px;
+        box-sizing: border-box;
+    }
+    .btn-doc:hover {
+        background: var(--if-green);
+        color: white !important;
+        border-color: var(--if-green);
+        transform: translateY(-1px);
+        box-shadow: 0 3px 6px rgba(0,0,0,0.1);
+    }
+    .btn-doc i {
+        font-size: 0.9rem;
+        color: var(--if-green);
+        flex: 0 0 auto;
+    }
+    .btn-doc span {
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+    }
+    .btn-doc:hover i {
+        color: white;
+    }
+
+    /* Indented Tree Styles */
+    .tree-view-wrapper {
+        padding: 30px;
+        overflow-y: auto;
+        height: 100%;
+        background: #f8f9fa;
+        flex: 1;
+    }
+    .tree-list, .tree-list ul {
+        list-style-type: none;
+        margin: 0;
+        padding: 0;
+        position: relative;
+    }
+    .tree-list ul {
+        margin-left: 45px;
+    }
+    .tree-list ul:before {
+        content: '';
+        position: absolute;
+        top: 0;
+        left: -22px;
+        width: 1px;
+        height: 100%;
+        background: #bdc3c7;
+    }
+    .tree-list li {
+        margin: 12px 0;
+        position: relative;
+    }
+    .tree-list li:before {
+        content: '';
+        position: absolute;
+        top: 25px; 
+        left: -22px;
+        width: 22px;
+        height: 1px;
+        background: #bdc3c7;
+    }
+    .tree-list li:last-child:after {
+        content: '';
+        position: absolute;
+        top: 25px;
+        left: -22px;
+        width: 1px;
+        height: 100%;
+        background: #f8f9fa;
+    }
+
+    .node-box {
+        background: white;
+        border: 2px solid var(--if-green);
+        border-radius: 8px;
+        padding: 0;
+        box-shadow: 0 2px 4px rgba(0,0,0,0.05);
+        display: flex;
+        flex-direction: column;
+        width: 400px;
+        position: relative;
+        overflow: hidden;
+    }
+    
+    .node-box-list-header {
+        background: var(--if-green);
+        color: white;
+        padding: 0 12px;
+        text-align: center;
+        font-weight: 600;
+        font-size: 0.82rem;
+        height: 32px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        white-space: nowrap;
+        text-overflow: ellipsis;
+        overflow: hidden;
+        box-sizing: border-box;
+    }
+
+    .node-box .node-box-list-header {
+        min-height: 48px !important;
+        height: auto !important;
+        padding-top: 7px !important;
+        padding-bottom: 7px !important;
+        white-space: normal !important;
+        text-overflow: clip !important;
+        overflow: visible !important;
+        overflow-wrap: anywhere;
+        word-break: normal;
+        line-height: 1.2;
+    }
+
+    .node-box .node-box-list-body .role {
+        max-width: 100%;
+        white-space: normal;
+        overflow-wrap: anywhere;
+        word-break: normal;
+        line-height: 1.25;
+    }
+
+    .node-box-list-body {
+        padding: 12px 15px;
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        text-align: center;
+        flex: 1;
+    }
+    .node-box-list-body h4 {
+        margin: 0 0 4px 0;
+        font-size: 14px;
+        font-weight: 700;
+        color: var(--if-green);
+    }
+    .node-box-list-body .role {
+        font-size: 0.85rem;
+        color: #34495e;
+        font-weight: 500;
+        margin-bottom: 3px;
+    }
+    
+    .node-box-badge {
+        font-size: 0.7rem;
+        background: #f1f3f5;
+        color: #495057;
+        padding: 2px 5px;
+        border-radius: 4px;
+        font-weight: 600;
+        margin-left: 6px;
+        border: 1px solid #dee2e6;
+    }
+
+    /* Estilo para Unidades com Pendência de Definição (Setor ou Seção) */
+    .node-pending-definition {
+        border: 2px dashed #f39c12 !important;
+        background-color: #fff9f0 !important;
+    }
+    .node-pending-definition .node-box-list-header {
+        background-color: #f39c12 !important;
+    }
+
+    @media (max-width: 900px) {
+        .chart-panel {
+            height: calc(100vh - 115px);
+            min-height: 520px;
+        }
+        .chart-header {
+            padding: 10px 16px;
+        }
+        .chart-header-row {
+            align-items: stretch;
+            flex-direction: column;
+        }
+        .chart-header-tools {
+            justify-content: flex-start;
+        }
+        .chart-title-block {
+            align-items: flex-start;
+            flex-direction: column;
+        }
+        .btn-doc {
+            max-width: 100%;
+        }
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="animate-fade">
+
+    <div class="org-detail-nav">
+        <a href="{% url 'organograma_list' %}">
+            <i class="fa-solid fa-arrow-left"></i> Voltar para a Lista de Organogramas
+        </a>
+        {% if show_solicitacao_backlink %}
+        <a href="{{ next_url }}">
+            <i class="fa-solid fa-arrow-left"></i> Voltar para a Lista de Solicitações
+        </a>
+        {% endif %}
+    </div>
+
+    <div class="chart-panel">
+        <div class="chart-header">
+            {% if show_competencias_pendencias and competencias_resumo.tem_alertas %}
+            <div class="chart-alert">
+                <i class="fa-solid fa-scale-balanced"></i>
+                <div style="flex:1;">
+                    <strong>Competências pendentes:</strong>
+                    {{ competencias_resumo.sem_competencias }} unidade(s) sem competências e
+                    {{ competencias_resumo.desatualizadas }} unidade(s) com competências desatualizadas.
+                    {% if regimento_competencias %}Regimento de referência: {{ regimento_competencias }}.{% endif %}
+                </div>
+            </div>
+            {% endif %}
+            {% if organograma.has_pending_units and organograma.status != 'OFICIAL' %}
+            <div id="pending-warning-banner" class="chart-alert" style="animation: shake 0.5s ease-in-out;">
+                <i class="fa-solid fa-triangle-exclamation"></i>
+                <div style="flex: 1;">
+                    <strong>Atenção Institucional:</strong> Existem unidades aguardando definição de Tipo (Setor vs Seção) ou Cargo genérico. Resolva as pendências no construtor para habilitar a publicação.
+                </div>
+            </div>
+            <style>
+                @keyframes shake {
+                    0%, 100% { transform: translateX(0); }
+                    25% { transform: translateX(-5px); }
+                    75% { transform: translateX(5px); }
+                }
+            </style>
+            {% endif %}
+
+            <div class="chart-header-row">
+                <div class="chart-title-block">
+                    <div class="chart-title-line">
+                        <h2>Hierarquia: {{ organograma.campus.nome }}</h2>
+                        <span class="chart-status"><strong>Status:</strong> {{ organograma.get_status_display }}</span>
+                    </div>
+                    {% if organograma.precisa_adequacao_modelo %}
+                    <div style="margin-top: 10px; padding: 10px 12px; border-radius: 8px; background: #fff7e6; color: #8a5b00; font-size: 0.85rem; border: 1px solid #f6d28b;">
+                        O Modelo Referencial deste campus foi atualizado e esta estrutura ainda depende de adequação à revisão mais recente.
+                    </div>
+                    {% endif %}
+                    <div class="doc-buttons">
+                        {% if organograma.resolucao_estrutura and organograma.resolucao_estrutura.arquivo %}
+                        <a href="{{ organograma.resolucao_estrutura.arquivo.url }}" target="_blank" class="btn-doc" title="{{ organograma.resolucao_estrutura.nome }}">
+                            <i class="fa-solid fa-file-pdf"></i> <span>Resolução Estrutura Organizacional</span>
+                        </a>
+                        {% elif organograma.resolucao_estrutura and organograma.resolucao_estrutura.link %}
+                        <a href="{{ organograma.resolucao_estrutura.link }}" target="_blank" class="btn-doc" title="{{ organograma.resolucao_estrutura.nome }}">
+                            <i class="fa-solid fa-arrow-up-right-from-square"></i> <span>Resolução Estrutura Organizacional</span>
+                        </a>
+                        {% elif organograma.documento_aprovacao %}
+                        <a href="{{ organograma.documento_aprovacao.url }}" target="_blank" class="btn-doc" title="{{ organograma.nome_documento_aprovacao }}">
+                            <i class="fa-solid fa-file-pdf"></i> <span>Resolução Estrutura Organizacional</span>
+                        </a>
+                        {% endif %}
+                        
+                        {% if organograma.campus.sigla == 'IFMG' and organograma.regimento_geral_referencia and organograma.regimento_geral_referencia.arquivo %}
+                        <a href="{{ organograma.regimento_geral_referencia.arquivo.url }}" target="_blank" class="btn-doc" title="{{ organograma.regimento_geral_referencia.nome }}">
+                            <i class="fa-solid fa-file-pdf"></i> <span>Resolução Regimento Geral</span>
+                        </a>
+                        {% elif organograma.campus.sigla == 'IFMG' and organograma.regimento_geral_referencia and organograma.regimento_geral_referencia.link %}
+                        <a href="{{ organograma.regimento_geral_referencia.link }}" target="_blank" class="btn-doc" title="{{ organograma.regimento_geral_referencia.nome }}">
+                            <i class="fa-solid fa-arrow-up-right-from-square"></i> <span>Resolução Regimento Geral</span>
+                        </a>
+                        {% elif organograma.campus.sigla == 'IFMG' and organograma.regimento_geral_arquivo %}
+                        <a href="{{ organograma.regimento_geral_arquivo.url }}" target="_blank" class="btn-doc" title="{{ organograma.nome_regimento_geral }}">
+                            <i class="fa-solid fa-file-pdf"></i> <span>Resolução Regimento Geral</span>
+                        </a>
+                        {% endif %}
+                        
+                        {% if organograma.regimento_referencia and organograma.regimento_referencia.arquivo %}
+                        <a href="{{ organograma.regimento_referencia.arquivo.url }}" target="_blank" class="btn-doc" title="{{ organograma.regimento_referencia.nome }}">
+                            <i class="fa-solid fa-file-pdf"></i> <span>Portaria Regimento Interno</span>
+                        </a>
+                        {% elif organograma.regimento_referencia and organograma.regimento_referencia.link %}
+                        <a href="{{ organograma.regimento_referencia.link }}" target="_blank" class="btn-doc" title="{{ organograma.regimento_referencia.nome }}">
+                            <i class="fa-solid fa-arrow-up-right-from-square"></i> <span>Portaria Regimento Interno</span>
+                        </a>
+                        {% elif organograma.regimento_arquivo %}
+                        <a href="{{ organograma.regimento_arquivo.url }}" target="_blank" class="btn-doc" title="{{ organograma.nome_regimento }}">
+                            <i class="fa-solid fa-file-pdf"></i> <span>Portaria Regimento Interno</span>
+                        </a>
+                        {% endif %}
+                    </div>
+
+                    {% if linked_orgs %}
+                    <details style="margin-top: 10px; background: transparent; transition: all 0.2s; outline: none;">
+                        <summary style="font-weight: 600; color: #576574; font-size: 0.85rem; cursor: pointer; display: flex; align-items: center; gap: 6px; outline: none;">
+                            <i class="fa-solid fa-circle-nodes" style="color: var(--if-green); font-size: 0.9rem;"></i> 
+                            <span>Organogramas Vinculados</span>
+                        </summary>
+                        <div style="display: flex; gap: 8px; flex-wrap: wrap; margin-top: 10px; padding-top: 8px; align-items: center;">
+                            {% for l in linked_orgs %}
+                                <a href="{% url 'organograma_detail' l.pk %}?next={{ request.get_full_path|urlencode }}" style="background: var(--if-green); color: white; padding: 4px 12px; border-radius: 20px; font-size: 0.75rem; text-decoration: none; font-weight: 600; display: flex; align-items: center; justify-content: center; transition: all 0.2s;" onmouseover="this.style.transform='translateY(-1px)'; this.style.opacity='0.9'" onmouseout="this.style.transform='translateY(0)'; this.style.opacity='1'">
+                                    {{ l.campus.sigla }}
+                                </a>
+                            {% endfor %}
+                        </div>
+                    </details>
+                    {% endif %}
+                </div>
+                
+                <div class="chart-header-tools">
+                    {% if user.is_authenticated %}
+                        {% if request.user.is_staff or request.user.profile.campus == organograma.campus %}
+                            {% if organograma.status == 'OFICIAL' %}
+                                {% if organograma.tem_proposta_ativa %}
+                                    <a href="#" class="btn-primary btn-disabled" style="background-color: #bdc3c7; cursor: not-allowed;" onclick="alert('Este organograma já possui uma proposta de alteração em análise.'); return false;">
+                                        <i class="fa-solid fa-lock"></i> Em Alteração
+                                    </a>
+                                {% else %}
+                                    <a href="{% url 'solicitacao_create' organograma.pk %}" class="btn-primary" style="background-color: #f39c12;">
+                                        <i class="fa-solid fa-code-branch"></i> Propor Alteração
+                                    </a>
+                                {% endif %}
+                            {% elif organograma.status == 'PROPOSTA' or organograma.status == 'RASCUNHO' %}
+                                <a href="{% url 'organograma_build' organograma.pk %}{% if next_url %}?next={{ next_url|urlencode }}{% endif %}" class="btn-primary" style="background-color: #f39c12;">
+                                    <i class="fa-solid fa-pen-ruler"></i> Construir Estrutura
+                                </a>
+                                {% if related_solicitacao and related_solicitacao.status == 'RASCUNHO' or related_solicitacao and related_solicitacao.status == 'DEVOLVIDO_CORRECAO' %}
+                                <form method="post" action="{% url 'solicitacao_resubmit' related_solicitacao.id %}" style="display:inline;">
+                                    {% csrf_token %}
+                                    {% if next_url %}<input type="hidden" name="next" value="{{ next_url }}">{% endif %}
+                                    <button type="submit" class="btn-primary" style="background-color: var(--if-green); border: none;">
+                                        <i class="fa-solid fa-paper-plane"></i> Reenviar para Aprovação
+                                    </button>
+                                </form>
+                                {% endif %}
+                            {% endif %}
+                        {% endif %}
+                    {% endif %}
+                </div>
+            </div>
+        </div>
+
+        <div class="org-chart-export-area" style="position: relative; flex: 1; min-height: 0; display: flex;">
+            <div class="chart-container-wrapper" id="orgChartContainer" style="flex: 1; overflow: hidden; display: block;">
+                <!-- Chart renders here -->
+            </div>
+
+            {% include 'core/includes/organograma_export_controls.html' %}
+            
+            <div class="chart-control-group">
+                <button type="button" class="control-btn-center" onclick="window.recenterChart()" title="Centralizar visualização">
+                    <i class="fa-solid fa-compress"></i> Centralizar
+                </button>
+                <button type="button" class="control-btn-center" onclick="window.toggleChartFullscreen()" title="Visualizar em tela cheia">
+                    <i id="fullscreenIcon" class="fa-solid fa-expand"></i> <span id="fullscreenText">Tela cheia</span>
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- D3.js and D3 Org Chart Library -->
+<script src="https://d3js.org/d3.v7.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/d3-flextree@2.1.2/build/d3-flextree.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/d3-org-chart@2.6.0"></script>
+
+<script>
+    window.toggleChartFullscreen = function() {
+        const area = document.querySelector('.org-chart-export-area');
+        if (!area) return;
+        if (!document.fullscreenElement) {
+            area.requestFullscreen();
+        } else {
+            document.exitFullscreen();
+        }
+    };
+
+    document.addEventListener('fullscreenchange', () => {
+        const isFullscreen = !!document.fullscreenElement;
+        const icon = document.getElementById('fullscreenIcon');
+        const text = document.getElementById('fullscreenText');
+        if (icon) icon.className = `fa-solid ${isFullscreen ? 'fa-compress' : 'fa-expand'}`;
+        if (text) text.textContent = isFullscreen ? 'Sair da tela cheia' : 'Tela cheia';
+        setTimeout(() => {
+            if (window.recenterChart) window.recenterChart();
+        }, 120);
+    });
+
+    (function() {
+        const rawUnidades = '{{ unidades_json|escapejs }}';
+        const rawTodosCampi = '{{ todos_campi_json|escapejs }}';
+        const showCompetenciasPendencias = {{ show_competencias_pendencias|yesno:"true,false" }};
+        window.showCompetenciasPendencias = showCompetenciasPendencias;
+        
+        let data = [];
+        try {
+            data = JSON.parse(rawUnidades || '[]');
+            window.todosCampiData = JSON.parse(rawTodosCampi || '[]');
+        } catch (e) {
+            console.error("Erro parsing JSON:", e);
+        }
+
+        // Criar um mapa de info para acesso rápido e seguro via ID
+        window.nodeInfoMap = {};
+        data.forEach(d => {
+            window.nodeInfoMap[d.id] = {
+                name: d.name || "",
+                competencias: d.competencias || [],
+                competenciasStatusLabel: showCompetenciasPendencias ? (d.competenciasStatusLabel || "") : ""
+            };
+        });
+
+        if (!data || data.length === 0) {
+            document.getElementById('orgChartContainer').innerHTML = `
+                <div style="display:flex; height:100%; align-items:center; justify-content:center; color:#95a5a6; flex-direction:column;">
+                    <i class="fa-regular fa-folder-open" style="font-size: 3rem; margin-bottom:15px;"></i>
+                    <p>Nenhuma unidade cadastrada neste organograma.</p>
+                </div>
+            `;
+            return;
+        }
+
+        window.renderChart = function() {
+            try {
+                        const container = d3.select('#orgChartContainer');
+            const prevSvg = container.select("svg").node();
+            const currentZoomState = prevSvg ? d3.zoomTransform(prevSvg) : null;
+            container.html("");  // Limpa o container
+
+            // --- Suporte a Múltiplas Raízes (Raiz Virtual) ---
+
+            const standalones = data.filter(d => !d.parentId || d.parentId === "");
+            let processedData = [...data];
+            let rootNodeId = null;
+
+            if (standalones.length > 1) {
+                rootNodeId = "__virtual_root__";
+                processedData.push({
+                    id: rootNodeId,
+                    parentId: null,
+                    name: "Raiz Virtual",
+                    sigla: "VRT"
+                });
+                processedData.forEach(d => {
+                    if (d.id !== rootNodeId && (!d.parentId || d.parentId === "")) {
+                        d.parentId = rootNodeId;
+                    }
+                });
+            }
+
+                                    // 1. Criar Hierarchy
+            const root = d3.stratify()
+                .id(d => d.id)
+                .parentId(d => d.parentId === "" ? null : d.parentId)
+                (processedData);
+
+            // 2. Layout Híbrido Dinâmico (Suporte a Horizontal e Vertical misto)
+            const boxWidth = 400; // Alinhado com o HTML
+            const boxHeight = 150;
+
+            window.recenterChart = function() {
+                const svg = d3.select('#orgChartContainer svg');
+                if (svg.empty() || !window.currentRoot) return;
+                
+                const gCanvas = svg.select(".canvas-group");
+                const zoom = d3.zoom().on("zoom", (event) => gCanvas.attr("transform", event.transform));
+                
+                const container = document.getElementById('orgChartContainer');
+                const width = container.clientWidth;
+                const height = container.clientHeight;
+                
+                // Encontrar limites dos nós visíveis
+                const visibleNodes = window.currentRoot.descendants().filter(d => d.y !== -3000 && d.id !== "__virtual_root__");
+                if (visibleNodes.length === 0) return;
+                
+                let minX = Infinity, maxX = -Infinity, minY = Infinity, maxY = -Infinity;
+                visibleNodes.forEach(d => {
+                    const x = d.x;
+                    const y = d.y;
+                    const w = 400; // boxWidth
+                    const h = boxHeight;
+                    if (x < minX) minX = x;
+                    if (x + w > maxX) maxX = x + w;
+                    if (y < minY) minY = y;
+                    if (y + h > maxY) maxY = y + h;
+                });
+                
+                const padding = 40;
+                const contentW = maxX - minX;
+                const contentH = maxY - minY;
+                
+                const midX = minX + contentW / 2;
+                const midY = minY + contentH / 2;
+                
+                const scaleX = (width - padding * 2) / contentW;
+                const scaleY = (height - padding * 2) / contentH;
+                const scale = Math.min(Math.max(Math.min(scaleX, scaleY), 0.1), 1); 
+                
+                svg.transition().duration(750).call(
+                    zoom.transform, 
+                    d3.zoomIdentity
+                        .translate(width / 2 - midX * scale, height / 2 - midY * scale)
+                        .scale(scale)
+                );
+            };
+
+            function measureSubTree(node) {
+                if (node.parent && (node.parent.data.collapsed || node.parent.hidden_by_collapse)) {
+                    node.hidden_by_collapse = true;
+                    node.bbox = { width: 0, height: 0, childrenW: 0, childrenH: 0 };
+                    return node.bbox;
+                } else {
+                    node.hidden_by_collapse = false;
+                }
+
+                let childrenW = 0;
+                let childrenH = 0;
+                let maxChildH = 0;
+
+                const layout = (node.depth === 0 || node.id === "__virtual_root__") ? 'H' : (node.data.layout_filhos || 'V');
+
+                if (node.children && node.children.length > 0) {
+                    if (layout === 'H') {
+                        node.children.forEach(c => {
+                            const cBox = measureSubTree(c);
+                            if (cBox.width > 0) {
+                                childrenW += cBox.width + 100; 
+                                if (cBox.height > maxChildH) maxChildH = cBox.height;
+                            }
+                        });
+                        childrenW = Math.max(0, childrenW - 100);
+                        childrenH = maxChildH;
+                    } else { 
+                        let currentMaxW = 0;
+                        node.children.forEach(c => {
+                            const cBox = measureSubTree(c);
+                            if (cBox.height > 0) {
+                                childrenH += cBox.height + 35; 
+                                if (cBox.width + 45 > currentMaxW) currentMaxW = cBox.width + 45; 
+                            }
+                        });
+                        childrenH = Math.max(0, childrenH - 35);
+                        childrenW = currentMaxW;
+                    }
+                }
+
+                node.bbox = {
+                    width: Math.max(boxWidth, childrenW),
+                    height: boxHeight + (childrenH > 0 ? 55 + childrenH : 0), 
+                    childrenW: childrenW,
+                    childrenH: childrenH
+                };
+                return node.bbox;
+            }
+
+            function positionSubTree(node, startX, startY) {
+                if (node.hidden_by_collapse) {
+                    node.y = -3000; node.x = -3000;
+                    if (node.children) node.children.forEach(c => positionSubTree(c, -3000, -3000));
+                    return;
+                }
+
+                node.y = startY;
+                const layout = (node.depth === 0 || node.id === "__virtual_root__") ? 'H' : (node.data.layout_filhos || 'V');
+
+                if (layout === 'H') {
+                    node.x = startX + Math.max(0, (node.bbox.childrenW - boxWidth) / 2);
+                } else {
+                    node.x = startX;
+                }
+
+                if (node.children && node.children.length > 0) {
+                    let nextX = startX;
+                    let nextY = startY + boxHeight + 55;
+
+                    if (layout === 'H') {
+                        node.children.forEach(c => {
+                            if (!c.hidden_by_collapse) {
+                                positionSubTree(c, nextX, nextY);
+                                nextX += c.bbox.width + 100;
+                            } else {
+                                positionSubTree(c, -3000, -3000);
+                            }
+                        });
+                    } else { 
+                        node.children.forEach(c => {
+                            if (!c.hidden_by_collapse) {
+                                positionSubTree(c, startX + 45, nextY);
+                                nextY += c.bbox.height + 35;
+                            } else {
+                                positionSubTree(c, -3000, -3000);
+                            }
+                        });
+                    }
+                }
+            }
+
+            measureSubTree(root);
+            positionSubTree(root, 0, root.id === "__virtual_root__" ? -2000 : 40);
+            
+            window.currentRoot = root; // Disponibilizar para centralização
+
+            if (root.id === "__virtual_root__") {
+                root.y = -3000; root.x = -3000;
+            } else {
+                root.x += 50; 
+            }
+
+            // 3. Criar SVG e Zoom Group
+            const svg = container.append("svg")
+                .attr("width", "100%")
+                .attr("height", "100%")
+                .style("overflow", "visible");
+
+            const gCanvas = svg.append("g").attr("class", "canvas-group");
+
+            const zoom = d3.zoom()
+                .scaleExtent([0.3, 3])
+                .on("zoom", (event) => {
+                    gCanvas.attr("transform", event.transform);
+                });
+            svg.call(zoom);
+
+                        // 4. Desenhar Linhas (Backbone) - Exclui virtual source
+            gCanvas.selectAll(".link")
+                .data(root.links().filter(d => d.source.id !== rootNodeId))
+                .join("path")
+                .attr("class", "link")
+                .attr("d", d => {
+                    if (d.target.y === -3000) return '';
+                    const sX = d.source.x + 210;
+                    const sY = d.source.y + boxHeight;
+                    const tX = d.target.x + 210;
+                    const tY = d.target.y;
+
+                    const isHorizontal = d.source.data.layout_filhos === 'H' || d.source.id === "__virtual_root__" || d.source.depth === 0;
+
+                    if (isHorizontal) {
+                        const midY = (sY + tY) / 2;
+                        return `M${sX},${sY} V${midY} H${tX} V${tY}`;
+                    } else {
+                        const backboneX = d.source.x + 20; 
+                        return `M${backboneX},${sY} V${d.target.y + 55} H${d.target.x}`;
+                    }
+                })
+                .attr("stroke", "#bdc3c7")
+                .attr("stroke-width", 2)
+                .attr("stroke-dasharray", d => d.target.data.ligacaoIndireta ? "5,5" : "none")
+                .attr("fill", "none");
+
+            // 5. Desenhar Nós - Exclui virtual node
+            const node = gCanvas.selectAll(".node")
+                .data(root.descendants().filter(d => d.id !== rootNodeId))
+                .join("g")
+                .attr("class", "node")
+                .attr("transform", d => `translate(${d.x},${d.y})`)
+                .on("click", (event, d) => {
+                    // Clicar no card em si não faz nada relacionado a atributos agora
+                    // (O clique agora é exclusivo no botão de info)
+                });
+
+            node.append("foreignObject")
+                .attr("width", 400)
+                .attr("height", 180)
+                .html(d => {
+                    const nodeData = d.data;
+                    const isGrp = nodeData.is_agrupamento;
+
+                    if (isGrp) {
+                        return `
+                        <div class="node-box" style="width: 400px; min-height: 110px; height: auto; display: flex; align-items: center; justify-content: center; overflow: visible; border: 2px dashed #757575; background: #eaedf1; border-radius: 8px; position: relative; padding: 15px; box-sizing: border-box;">
+                            <div style="font-weight: 700; font-size: 15px; color: #2c3e50; text-align: center; word-break: break-word; width: 100%;">
+                                ${nodeData.name && nodeData.name !== 'None' && nodeData.name !== 'null' ? nodeData.name : 'Caixa de Agrupamento'}
+                            </div>
+                        </div>
+                        `;
+                    } else {
+                        const hasAtribuicoes = nodeData.competencias && nodeData.competencias.length > 0;
+                        const btnColor = hasAtribuicoes ? 'white' : 'rgba(255,255,255,0.4)';
+                        const btnBg = hasAtribuicoes ? 'rgba(255,255,255,0.2)' : 'transparent';
+                        const btnCursor = hasAtribuicoes ? 'pointer' : 'default';
+                        const btnTitle = hasAtribuicoes ? 'Ver competências' : 'Nenhuma competência cadastrada';
+
+                        const isPending = !!nodeData.isPendingDefinition;
+
+                        return `
+                        <div class="node-box ${isPending ? 'node-pending-definition' : ''}" style="width: 400px; min-height: 110px; height: auto; display: flex; flex-direction: column; overflow: visible; border: 2px solid var(--if-green); border-radius: 8px; background: white; position: relative;">
+                            <div class="info-trigger" 
+                                 onclick="${hasAtribuicoes ? `window.showAtribuicoesFromId('${nodeData.id}')` : ''}"
+                                 title="${btnTitle}" 
+                                 style="position: absolute; top: 4px; right: 4px; background: ${btnBg}; color: ${btnColor}; border: 1px solid ${btnColor}; border-radius: 6px; width: 24px; height: 24px; display: flex; align-items: center; justify-content: center; font-size: 11px; cursor: ${btnCursor}; z-index: 10; transition: all 0.2s;">
+                                 <i class="fa-solid fa-info"></i>
+                            </div>
+                            <div class="node-box-list-header" style="background: var(--if-green); color: white; padding: 0 40px 0 12px; text-align: center; font-size: 0.8rem; font-weight: 600; white-space: nowrap; text-overflow: ellipsis; overflow: hidden; height: 32px; display: flex; align-items: center; justify-content: center; box-sizing: border-box;">
+                                ${nodeData.name}
+                                ${isPending ? '<span class="node-box-badge" style="background:#fff; color:#f39c12; border-color:#f39c12; margin-left:10px;">Definição Pendente</span>' : ''}
+                            </div>
+                            <div class="node-box-list-body" style="padding: 10px 15px; flex: 1; display: flex; flex-direction: column; align-items: center; justify-content: center; text-align: center;">
+                                <h4 style="margin: 0 0 3px 0; font-size: 14px; font-weight: 700; color: var(--if-green);">${nodeData.sigla}</h4>
+                                <div class="role" style="font-size: 0.85rem; color: #34495e; font-weight: 500;">${nodeData.role}</div>
+                                ${nodeData.roleSigla ? `<div style="background:#ecf0f1; padding:2px 6px; border-radius:4px; font-size:11px; color:#7f8c8d; margin-top:3px; display:inline-block;">${nodeData.roleSigla}</div>` : ''}
+                                ${showCompetenciasPendencias ? `<div class="org-export-competencias-status" style="font-size:10px; margin-top:4px; color:${nodeData.competenciasStatus === 'revisada' ? 'var(--if-green)' : '#c77800'};"><i class="fa-solid fa-scale-balanced"></i> ${nodeData.competenciasStatusLabel || 'Sem competências'}</div>` : ''}
+                            </div>
+                        </div>
+                        `;
+                    }
+                });
+
+                        if (currentZoomState) {
+                svg.call(zoom.transform, currentZoomState);
+            } else {
+                // Centralizar automaticamente no primeiro carregamento
+                if (window.recenterChart) {
+                    window.recenterChart();
+                } else {
+                    svg.call(zoom.transform, d3.zoomIdentity.translate(20, 20).scale(0.85));
+                }
+            }
+            } catch (e) {
+                console.error("Erro renderChart:", e);
+                document.getElementById('orgChartContainer').innerHTML = `<div style="padding:20px; color:red;">Erro render: ${e.message}</div>`;
+            }
+        };
+
+        // Inicializar
+        window.renderChart();
+    })();
+
+    window.showAtribuicoesFromId = function(id) {
+        const info = window.nodeInfoMap[id];
+        if (info && info.competencias && info.competencias.length) {
+            window.showAtribuicoes(info.name, info.competencias, info.competenciasStatusLabel);
+        }
+    };
+
+    window.showAtribuicoes = function(nome, competencias, statusLabel) {
+        // Remover modal anterior se existir
+        const oldModal = document.getElementById('atribuicoesModal');
+        if (oldModal) oldModal.remove();
+
+        const grupos = competencias.reduce((acc, c) => {
+            const key = c.regimentoId || c.regimentoNome || 'sem-regimento';
+            if (!acc[key]) {
+                acc[key] = {
+                    nome: c.regimentoNome || c.regimentoTipo || 'Regimento',
+                    tipo: c.regimentoTipo || '',
+                    url: c.regimentoUrl || '',
+                    competencias: []
+                };
+            }
+            acc[key].competencias.push(c);
+            return acc;
+        }, {});
+
+        const itemsHtml = Object.values(grupos).map(grupo => `
+            <section style="border:1px solid #e2e8f0; border-radius:10px; margin-bottom:14px; overflow:hidden;">
+                <div style="background:#f8fafc; padding:10px 14px; border-bottom:1px solid #e2e8f0; display:flex; align-items:center; justify-content:space-between; gap:12px; flex-wrap:wrap;">
+                    <div>
+                        ${grupo.tipo ? `<div style="font-size:0.74rem; color:#64748b; font-weight:700; text-transform:uppercase;">${grupo.tipo}</div>` : ''}
+                        <div style="font-size:0.9rem; color:#2c3e50; font-weight:700;">${grupo.nome}</div>
+                    </div>
+                    ${grupo.url ? `<a href="${grupo.url}" target="_blank" rel="noopener" style="color:var(--if-green); font-weight:700; text-decoration:none; white-space:nowrap;"><i class="fa-solid fa-arrow-up-right-from-square"></i> Abrir regimento</a>` : ''}
+                </div>
+                <div style="padding:12px 14px;">
+                    ${grupo.competencias.map(c => `
+                        <div style="border:1px solid ${window.showCompetenciasPendencias && !c.atualizada ? '#f5c16c' : '#e2e8f0'}; border-radius:8px; padding:12px 14px; margin-bottom:10px;">
+                            <div style="font-weight:700; color:#2c3e50; font-size:0.9rem; margin-bottom:6px;">${c.referencia || 'Sem referência normativa'}</div>
+                            <div style="white-space:pre-wrap; word-break:break-word;">${c.texto}</div>
+                            ${window.showCompetenciasPendencias && !c.atualizada ? '<div style="font-size:0.8rem; color:#c77800; margin-top:8px;"><i class="fa-solid fa-triangle-exclamation"></i> Competência vinculada a regimento antigo</div>' : ''}
+                        </div>
+                    `).join('')}
+                </div>
+            </section>
+        `).join('');
+
+        const modalHtml = `
+            <div id="atribuicoesModal" style="position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(15, 23, 42, 0.6); backdrop-filter: blur(4px); display: flex; align-items: center; justify-content: center; z-index: 9999; animation: modalFadeIn 0.3s ease-out;">
+                <div style="background: white; width: 600px; max-width: 90%; border-radius: 16px; overflow: hidden; box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.1), 0 10px 10px -5px rgba(0, 0, 0, 0.04); animation: modalSlideUp 0.3s ease-out;">
+                    <div style="background: var(--if-green); padding: 20px 25px; display: flex; justify-content: space-between; align-items: center; color: white;">
+                        <div style="display: flex; align-items: center; gap: 12px;">
+                            <i class="fa-solid fa-circle-info" style="font-size: 1.4rem; opacity: 0.9;"></i>
+                            <h3 style="margin: 0; font-size: 1.2rem; font-weight: 700; letter-spacing: -0.01em;">Competências: ${nome}</h3>
+                        </div>
+                        <button onclick="document.getElementById('atribuicoesModal').remove()" style="background: rgba(255,255,255,0.1); border: none; width: 32px; height: 32px; border-radius: 8px; display: flex; align-items: center; justify-content: center; color: white; cursor: pointer; transition: all 0.2s;">
+                            <i class="fa-solid fa-xmark"></i>
+                        </button>
+                    </div>
+                    <div style="padding: 30px; max-height: 450px; overflow-y: auto; font-size: 1rem; line-height: 1.7; color: #1e293b; background: #fff;">
+                        <div style="font-size:0.85rem; color:#7f8c8d; margin-bottom:12px;">${statusLabel || ''}</div>
+                        ${itemsHtml}
+                    </div>
+                    <div style="background: #f8fafc; padding: 15px 25px; border-top: 1px solid #e2e8f0; text-align: right;">
+                        <button onclick="document.getElementById('atribuicoesModal').remove()" style="background: var(--if-green); color: white; border: none; padding: 10px 20px; border-radius: 8px; font-weight: 600; cursor: pointer; transition: all 0.2s;">Fechar</button>
+                    </div>
+                </div>
+            </div>
+            <style>
+                @keyframes modalFadeIn { from { opacity: 0; } to { opacity: 1; } }
+                @keyframes modalSlideUp { from { transform: translateY(20px); opacity: 0; } to { transform: translateY(0); opacity: 1; } }
+                #atribuicoesModal button:hover { opacity: 0.8 !important; transform: scale(1.05); }
+            </style>
+        `;
+        const modalHost = document.fullscreenElement || document.body;
+        modalHost.insertAdjacentHTML('beforeend', modalHtml);
+        
+        // Fechar ao clicar fora
+        document.getElementById('atribuicoesModal').addEventListener('click', function(e) {
+            if (e.target === this) this.remove();
+        });
+    };
+</script>
+{% endblock %}

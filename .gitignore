@@ -1,0 +1,130 @@
+# =============================================================================
+# OrgRepo - Comprehensive .gitignore (Django + Python + Project Specific)
+# =============================================================================
+
+# -----------------------------------------------------------------------------
+# Python / Bytecode / Packaging
+# -----------------------------------------------------------------------------
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+build/
+develop-eggs/
+dist/
+downloads/
+eggs/
+.eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
+wheels/
+*.egg-info/
+.installed.cfg
+*.egg
+MANIFEST
+
+# -----------------------------------------------------------------------------
+# Virtual Environments
+# -----------------------------------------------------------------------------
+.venv/
+venv/
+ENV/
+env/
+.conda/
+
+# -----------------------------------------------------------------------------
+# Django Specific (never commit local DBs, media, or collected static)
+# -----------------------------------------------------------------------------
+*.sqlite3
+db.sqlite3
+media/
+staticfiles/
+*.log
+*.pot
+
+# -----------------------------------------------------------------------------
+# Environment & Secrets (critical for production)
+# -----------------------------------------------------------------------------
+.env
+.env.*
+!.env.example
+*.pem
+*.key
+
+# -----------------------------------------------------------------------------
+# IDE / Editor / OS
+# -----------------------------------------------------------------------------
+.idea/
+.vscode/
+*.swp
+*.swo
+*~
+.DS_Store
+Thumbs.db
+*.sublime-*
+
+# -----------------------------------------------------------------------------
+# Project-Specific Development Artifacts
+# -----------------------------------------------------------------------------
+# AI / agent tool caches (from previous development sessions)
+.antigravitycli/
+.codex_tmp/
+.gemini/
+brain/
+
+# Historical dev DB snapshots and logs (already in var/ but explicit)
+var/backups/
+var/*.log
+var/manual_test/
+
+# One-off / archived dev scripts (kept in scripts/archive/ but ignored for cleanliness)
+scripts/archive/
+
+# -----------------------------------------------------------------------------
+# Docker / Container
+# -----------------------------------------------------------------------------
+*.docker/
+docker-compose.override.yml
+
+# -----------------------------------------------------------------------------
+# Testing / Coverage
+# -----------------------------------------------------------------------------
+htmlcov/
+.tox/
+.nox/
+.coverage
+.coverage.*
+.cache
+nosetests.xml
+coverage.xml
+*.cover
+*.py,cover
+.hypothesis/
+.pytest_cache/
+
+# -----------------------------------------------------------------------------
+# mypy / type checking
+# -----------------------------------------------------------------------------
+.mypy_cache/
+.dmypy.json
+dmypy.json
+
+# -----------------------------------------------------------------------------
+# Jupyter / Notebooks (if ever used)
+# -----------------------------------------------------------------------------
+.ipynb_checkpoints
+*.ipynb
+
+# -----------------------------------------------------------------------------
+# Windows / PowerShell specific (we keep cross-platform in docs)
+# -----------------------------------------------------------------------------
+*.ps1
+Thumbs.db
+ehthumbs.db
+
+# Note: The two manual_test_*.ps1 scripts were intentionally moved to scripts/archive/
+# The "two versions / safe sandbox" pattern is preserved and documented instead.

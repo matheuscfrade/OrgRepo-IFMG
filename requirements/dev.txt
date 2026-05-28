@@ -1,0 +1,28 @@
+# =============================================================================
+# OrgRepo - Development / Testing Only Dependencies
+# Install with: pip install -r requirements/dev.txt
+# =============================================================================
+
+-r base.txt
+
+# Testing
+# pytest-django>=4.8
+# pytest>=8.0
+# factory-boy>=3.3
+# faker>=25.0
+
+# Code quality (recommended for GitHub CI)
+# ruff>=0.4
+# black>=24.0
+# mypy>=1.10
+# django-stubs>=5.0
+
+# Django debug toolbar (local only)
+django-debug-toolbar>=4.4
+
+# Nice-to-have for development
+# django-extensions>=3.2
+# werkzeug>=3.0   # for better runserver (if using extensions)
+
+# Windows-specific (only if you use the old manual_test_*.ps1 scripts from archive)
+# (none needed - we document the pattern in docs/development.md instead)

@@ -1,0 +1,405 @@
+<div class="org-export-toolbar" data-org-export-filename="{{ organograma_export_filename|default:'organograma' }}" aria-label="Exportar organograma">
+    <span class="org-export-label">Exportar</span>
+    <button type="button" class="org-export-btn" data-org-export-format="svg" title="Exportar organograma completo em SVG">
+        <i class="fa-solid fa-code"></i> SVG
+    </button>
+    <button type="button" class="org-export-btn" data-org-export-format="png" title="Exportar organograma completo em PNG">
+        <i class="fa-regular fa-image"></i> PNG
+    </button>
+    <button type="button" class="org-export-btn" data-org-export-format="pdf" title="Exportar organograma completo em PDF">
+        <i class="fa-regular fa-file-pdf"></i> PDF
+    </button>
+</div>
+
+<style>
+    .org-export-toolbar {
+        position: absolute;
+        top: 20px;
+        right: 20px;
+        z-index: 1000;
+        display: inline-flex;
+        align-items: center;
+        gap: 6px;
+        padding: 6px;
+        background: white;
+        border: 1px solid #dfe4ea;
+        border-radius: 8px;
+        box-shadow: 0 2px 8px rgba(0,0,0,0.12);
+    }
+    .org-export-label {
+        padding: 0 6px;
+        color: #576574;
+        font-size: 0.78rem;
+        font-weight: 700;
+    }
+    .org-export-btn {
+        display: inline-flex;
+        align-items: center;
+        gap: 5px;
+        height: 30px;
+        padding: 0 9px;
+        border: 1px solid #dfe4ea;
+        border-radius: 6px;
+        background: #f8f9fa;
+        color: #2c3e50;
+        font-size: 0.78rem;
+        font-weight: 700;
+        cursor: pointer;
+    }
+    .org-export-btn:hover {
+        background: var(--if-green);
+        border-color: var(--if-green);
+        color: white;
+    }
+</style>
+
+<script src="https://cdn.jsdelivr.net/npm/jspdf@2.5.1/dist/jspdf.umd.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/html2canvas@1.4.1/dist/html2canvas.min.js"></script>
+<script>
+    window.OrgChartExporter = window.OrgChartExporter || (function() {
+        const SVG_NS = 'http://www.w3.org/2000/svg';
+        const XHTML_NS = 'http://www.w3.org/1999/xhtml';
+        const EXPORT_PADDING = 48;
+
+        const exportStyles = `
+            :root { --if-green: #2E8B57; --if-green-dark: #1e6b3f; --if-red: #c0392b; }
+            * { box-sizing: border-box; font-family: Inter, Arial, sans-serif; }
+            .node-box, .node-content {
+                background: #fff;
+                border: 2px solid #2E8B57;
+                border-radius: 8px;
+                box-shadow: 0 2px 5px rgba(0,0,0,0.08);
+                color: #2c3e50;
+            }
+            .node-box-list-header, .node-header {
+                background: #2E8B57;
+                color: #fff;
+                font-weight: 600;
+            }
+            .node-box-list-body h4, .node-sigla-unidade { color: #2E8B57; }
+            .role, .node-role { color: #34495e; }
+            .node-box-badge { background: #f1f3f5; color: #495057; border: 1px solid #dee2e6; }
+            .node-pending-definition, .pending-definition { border-color: #f39c12 !important; background: #fffcf0 !important; }
+            .node-pending-definition .node-box-list-header, .pending-definition .node-box-list-header { background: #f39c12 !important; }
+            .org-export-competencias-status { display: none !important; }
+            .node-box-actions, .expand-toggle, .node-select-chk, .info-trigger { display: none !important; }
+        `;
+
+        function slugify(value) {
+            return String(value || 'organograma')
+                .normalize('NFD')
+                .replace(/[\u0300-\u036f]/g, '')
+                .replace(/[^a-zA-Z0-9]+/g, '-')
+                .replace(/^-+|-+$/g, '')
+                .toLowerCase() || 'organograma';
+        }
+
+        function getToolbar(button) {
+            return button.closest('.org-export-toolbar');
+        }
+
+        function getSvg() {
+            const container = document.getElementById('orgChartContainer');
+            return container ? container.querySelector('svg') : null;
+        }
+
+        function expandBounds(bounds, box) {
+            if (!box || !Number.isFinite(box.x) || !Number.isFinite(box.y) || box.width <= 0 || box.height <= 0) {
+                return bounds;
+            }
+            const minX = Math.min(bounds.minX, box.x);
+            const minY = Math.min(bounds.minY, box.y);
+            const maxX = Math.max(bounds.maxX, box.x + box.width);
+            const maxY = Math.max(bounds.maxY, box.y + box.height);
+            return { minX, minY, maxX, maxY };
+        }
+
+        function translatedBox(element) {
+            const box = element.getBBox();
+            const transform = element.transform && element.transform.baseVal.consolidate();
+            if (!transform) return box;
+            const matrix = transform.matrix;
+            if (matrix.e < -1000 || matrix.f < -1000) return null;
+            return {
+                x: box.x + matrix.e,
+                y: box.y + matrix.f,
+                width: box.width,
+                height: box.height
+            };
+        }
+
+        function getFullBounds(svg) {
+            const canvasGroup = svg.querySelector('.canvas-group');
+            let bounds = { minX: Infinity, minY: Infinity, maxX: -Infinity, maxY: -Infinity };
+
+            if (canvasGroup) {
+                canvasGroup.querySelectorAll('.link').forEach(link => {
+                    if (!link.getAttribute('d')) return;
+                    bounds = expandBounds(bounds, link.getBBox());
+                });
+                canvasGroup.querySelectorAll('.node').forEach(node => {
+                    bounds = expandBounds(bounds, translatedBox(node));
+                });
+            }
+
+            if (!Number.isFinite(bounds.minX)) {
+                const box = (canvasGroup || svg).getBBox();
+                bounds = { minX: box.x, minY: box.y, maxX: box.x + box.width, maxY: box.y + box.height };
+            }
+
+            const box = {
+                x: bounds.minX,
+                y: bounds.minY,
+                width: bounds.maxX - bounds.minX,
+                height: bounds.maxY - bounds.minY
+            };
+            return {
+                x: box.x - EXPORT_PADDING,
+                y: box.y - EXPORT_PADDING,
+                width: Math.max(box.width + EXPORT_PADDING * 2, 1),
+                height: Math.max(box.height + EXPORT_PADDING * 2, 1)
+            };
+        }
+
+        function prepareForeignObjects(svgClone) {
+            svgClone.querySelectorAll('foreignObject > *').forEach(element => {
+                element.setAttribute('xmlns', XHTML_NS);
+            });
+        }
+
+        function removeHiddenElements(svgClone) {
+            svgClone.querySelectorAll('.node').forEach(node => {
+                const transform = node.transform && node.transform.baseVal.consolidate();
+                if (transform && (transform.matrix.e < -1000 || transform.matrix.f < -1000)) {
+                    node.remove();
+                }
+            });
+            svgClone.querySelectorAll('.link').forEach(link => {
+                if (!link.getAttribute('d')) link.remove();
+            });
+        }
+
+        function removeExportOnlyElements(root) {
+            root.querySelectorAll('.org-export-competencias-status').forEach(element => element.remove());
+        }
+
+        function serializeSvg() {
+            const svg = getSvg();
+            if (!svg) {
+                throw new Error('Organograma ainda nao foi renderizado.');
+            }
+
+            const bounds = getFullBounds(svg);
+            const clone = svg.cloneNode(true);
+            const clonedCanvas = clone.querySelector('.canvas-group');
+
+            clone.setAttribute('xmlns', SVG_NS);
+            clone.setAttribute('width', String(Math.ceil(bounds.width)));
+            clone.setAttribute('height', String(Math.ceil(bounds.height)));
+            clone.setAttribute('viewBox', `${bounds.x} ${bounds.y} ${bounds.width} ${bounds.height}`);
+            clone.style.width = `${Math.ceil(bounds.width)}px`;
+            clone.style.height = `${Math.ceil(bounds.height)}px`;
+            clone.style.background = '#ffffff';
+
+            if (clonedCanvas) {
+                clonedCanvas.removeAttribute('transform');
+            }
+
+            removeHiddenElements(clone);
+            removeExportOnlyElements(clone);
+
+            const background = document.createElementNS(SVG_NS, 'rect');
+            background.setAttribute('x', String(bounds.x));
+            background.setAttribute('y', String(bounds.y));
+            background.setAttribute('width', String(bounds.width));
+            background.setAttribute('height', String(bounds.height));
+            background.setAttribute('fill', '#ffffff');
+            clone.insertBefore(background, clone.firstChild);
+
+            const style = document.createElementNS(SVG_NS, 'style');
+            style.textContent = exportStyles;
+            clone.insertBefore(style, clone.firstChild);
+
+            prepareForeignObjects(clone);
+
+            return {
+                svgText: new XMLSerializer().serializeToString(clone),
+                width: Math.ceil(bounds.width),
+                height: Math.ceil(bounds.height)
+            };
+        }
+
+        function downloadBlob(blob, filename) {
+            const url = URL.createObjectURL(blob);
+            const link = document.createElement('a');
+            link.href = url;
+            link.download = filename;
+            document.body.appendChild(link);
+            link.click();
+            link.remove();
+            URL.revokeObjectURL(url);
+        }
+
+        function exportSvg(filenameBase) {
+            const { svgText } = serializeSvg();
+            downloadBlob(new Blob([svgText], { type: 'image/svg+xml;charset=utf-8' }), `${filenameBase}.svg`);
+        }
+
+        function buildRasterStage() {
+            const svg = getSvg();
+            if (!svg) {
+                throw new Error('Organograma ainda nao foi renderizado.');
+            }
+
+            const bounds = getFullBounds(svg);
+            const width = Math.ceil(bounds.width);
+            const height = Math.ceil(bounds.height);
+            const stage = document.createElement('div');
+            stage.style.position = 'fixed';
+            stage.style.left = '-100000px';
+            stage.style.top = '0';
+            stage.style.width = `${width}px`;
+            stage.style.height = `${height}px`;
+            stage.style.overflow = 'hidden';
+            stage.style.background = '#ffffff';
+            stage.style.fontFamily = 'Inter, Arial, sans-serif';
+
+            const style = document.createElement('style');
+            style.textContent = exportStyles;
+            stage.appendChild(style);
+
+            const linksSvg = document.createElementNS(SVG_NS, 'svg');
+            linksSvg.setAttribute('width', String(width));
+            linksSvg.setAttribute('height', String(height));
+            linksSvg.setAttribute('viewBox', `${bounds.x} ${bounds.y} ${bounds.width} ${bounds.height}`);
+            linksSvg.style.position = 'absolute';
+            linksSvg.style.left = '0';
+            linksSvg.style.top = '0';
+            linksSvg.style.width = `${width}px`;
+            linksSvg.style.height = `${height}px`;
+            linksSvg.style.overflow = 'visible';
+
+            const canvasGroup = svg.querySelector('.canvas-group');
+            if (canvasGroup) {
+                canvasGroup.querySelectorAll('.link').forEach(link => {
+                    if (!link.getAttribute('d')) return;
+                    const clone = link.cloneNode(true);
+                    clone.removeAttribute('class');
+                    linksSvg.appendChild(clone);
+                });
+                stage.appendChild(linksSvg);
+
+                canvasGroup.querySelectorAll('.node').forEach(node => {
+                    const box = translatedBox(node);
+                    if (!box) return;
+                    const foreignObject = node.querySelector('foreignObject');
+                    const card = foreignObject && foreignObject.firstElementChild;
+                    if (!card) return;
+                    const cardClone = card.cloneNode(true);
+                    removeExportOnlyElements(cardClone);
+                    const nodeWrap = document.createElement('div');
+                    nodeWrap.style.position = 'absolute';
+                    nodeWrap.style.left = `${box.x - bounds.x}px`;
+                    nodeWrap.style.top = `${box.y - bounds.y}px`;
+                    nodeWrap.style.width = `${foreignObject.getAttribute('width') || Math.ceil(box.width)}px`;
+                    nodeWrap.style.minHeight = `${foreignObject.getAttribute('height') || Math.ceil(box.height)}px`;
+                    nodeWrap.appendChild(cardClone);
+                    stage.appendChild(nodeWrap);
+                });
+            }
+
+            document.body.appendChild(stage);
+            return { stage, width, height };
+        }
+
+        async function rasterCanvas() {
+            if (!window.html2canvas) {
+                throw new Error('Biblioteca de exportacao PNG/PDF nao carregada. Tente recarregar a pagina.');
+            }
+            const built = buildRasterStage();
+            try {
+                return await window.html2canvas(built.stage, {
+                    backgroundColor: '#ffffff',
+                    scale: 2,
+                    width: built.width,
+                    height: built.height,
+                    windowWidth: built.width,
+                    windowHeight: built.height,
+                    logging: false
+                });
+            } finally {
+                built.stage.remove();
+            }
+        }
+
+        function canvasBlob(canvas) {
+            return new Promise((resolve, reject) => {
+                canvas.toBlob(blob => {
+                    if (blob) {
+                        resolve(blob);
+                    } else {
+                        reject(new Error('Nao foi possivel gerar a imagem PNG.'));
+                    }
+                }, 'image/png');
+            });
+        }
+
+        async function exportPng(filenameBase) {
+            const canvas = await rasterCanvas();
+            downloadBlob(await canvasBlob(canvas), `${filenameBase}.png`);
+        }
+
+        async function exportPdf(filenameBase) {
+            const canvas = await rasterCanvas();
+
+            const jsPdf = window.jspdf && window.jspdf.jsPDF;
+            if (!jsPdf) {
+                const printWindow = window.open('', '_blank');
+                printWindow.document.write(`<html><head><title>${filenameBase}</title><style>@page{size:${canvas.width}px ${canvas.height}px;margin:0;}body{margin:0;background:#fff;}img{display:block;width:${canvas.width}px;height:${canvas.height}px;}</style></head><body><img src="${canvas.toDataURL('image/png')}" onload="window.print()"></body></html>`);
+                printWindow.document.close();
+                return;
+            }
+
+            const pdf = new jsPdf({
+                orientation: canvas.width >= canvas.height ? 'landscape' : 'portrait',
+                unit: 'px',
+                format: [canvas.width, canvas.height],
+                hotfixes: ['px_scaling']
+            });
+            pdf.addImage(canvas.toDataURL('image/png'), 'PNG', 0, 0, canvas.width, canvas.height);
+            pdf.save(`${filenameBase}.pdf`);
+        }
+
+        async function exportFormat(format, toolbar) {
+            const filenameBase = slugify(toolbar && toolbar.dataset.orgExportFilename);
+            if (format === 'svg') {
+                exportSvg(filenameBase);
+            } else if (format === 'png') {
+                await exportPng(filenameBase);
+            } else if (format === 'pdf') {
+                await exportPdf(filenameBase);
+            }
+        }
+
+        function bind() {
+            document.querySelectorAll('[data-org-export-format]').forEach(button => {
+                if (button.dataset.orgExportBound === 'true') return;
+                button.dataset.orgExportBound = 'true';
+                button.addEventListener('click', async () => {
+                    button.disabled = true;
+                    try {
+                        await exportFormat(button.dataset.orgExportFormat, getToolbar(button));
+                    } catch (error) {
+                        alert(error.message || 'Nao foi possivel exportar o organograma.');
+                    } finally {
+                        button.disabled = false;
+                    }
+                });
+            });
+        }
+
+        document.addEventListener('DOMContentLoaded', bind);
+        return { bind, exportFormat, serializeSvg, getFullBounds };
+    })();
+    window.OrgChartExporter.bind();
+</script>

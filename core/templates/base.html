@@ -1,0 +1,542 @@
+{% load static %}
+<!DOCTYPE html>
+<html lang="pt-br">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{% if IS_MANUAL_TEST %}[TESTE] {% endif %}{% block title %}OrgRepo - Instituto Federal{% endblock %}</title>
+    <!-- Modern Typography -->
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    <!-- Font Awesome for Icons -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <!-- SweetAlert2 -->
+    <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
+    
+    <style>
+        :root {
+            /* IF Standard Colors */
+            --if-green: #2E8B57; /* A deep, professional green */
+            --if-green-dark: #1e6b3f;
+            --if-red: #c0392b;
+            --bg-color: #f4f7fa;
+            --text-color: #2c3e50;
+            --sidebar-bg: #ffffff;
+            --sidebar-text: #596275;
+            --card-shadow: 0 4px 20px rgba(0, 0, 0, 0.05);
+            --transition-speed: 0.3s;
+        }
+
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+            font-family: 'Inter', sans-serif;
+        }
+
+        body {
+            background-color: var(--bg-color);
+            color: var(--text-color);
+            display: flex;
+            min-height: 100vh;
+        }
+
+        /* Sidebar Styling */
+        .sidebar {
+            width: 260px;
+            background-color: var(--sidebar-bg);
+            box-shadow: 2px 0 15px rgba(0,0,0,0.03);
+            display: flex;
+            flex-direction: column;
+            position: fixed;
+            height: 100%;
+            z-index: 1000;
+            transition: width var(--transition-speed), transform var(--transition-speed);
+        }
+
+        .sidebar.collapsed {
+            width: 70px;
+        }
+
+        .sidebar.collapsed .sidebar-header .logo-text,
+        .sidebar.collapsed .nav-item span,
+        .sidebar.collapsed .sidebar-footer,
+        .sidebar.collapsed #admin-chevron {
+            display: none !important;
+        }
+
+        .sidebar.collapsed #admin-submenu .nav-item {
+            padding-left: 0 !important;
+            justify-content: center;
+        }
+
+        .sidebar.collapsed .sidebar-header {
+            flex-direction: column;
+            height: auto;
+            padding: 15px 0;
+            gap: 10px;
+            justify-content: center;
+        }
+
+        .sidebar.collapsed .if-logo {
+            margin-right: 0;
+        }
+
+        .sidebar.collapsed .nav-item {
+            justify-content: center;
+            padding: 12px 0;
+        }
+
+        .sidebar.collapsed .nav-item i {
+            margin-right: 0;
+        }
+
+        .sidebar-header {
+            padding: 20px;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            border-bottom: 1px solid #f1f2f6;
+            height: 70px;
+        }
+
+        .if-logo {
+            width: 40px;
+            height: 40px;
+            background: linear-gradient(135deg, var(--if-green), var(--if-green-dark));
+            border-radius: 8px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: white;
+            font-weight: bold;
+            font-size: 1.2rem;
+            box-shadow: 0 4px 10px rgba(46, 139, 87, 0.3);
+            flex-shrink: 0;
+        }
+
+        .sidebar-header .title {
+            font-weight: 700;
+            font-size: 1.2rem;
+            color: var(--if-green-dark);
+        }
+        
+        .sidebar-header .subtitle {
+            font-size: 0.75rem;
+            color: #95a5a6;
+            margin-top: -2px;
+        }
+
+        .nav-menu {
+            padding: 20px 0;
+            flex: 1;
+        }
+
+        .nav-item {
+            padding: 12px 24px;
+            display: flex;
+            align-items: center;
+            color: var(--sidebar-text);
+            text-decoration: none;
+            transition: all var(--transition-speed);
+            position: relative;
+            font-weight: 500;
+        }
+
+        .nav-item i {
+            width: 24px;
+            font-size: 1.1rem;
+            margin-right: 12px;
+            color: #a4b0be;
+            transition: color var(--transition-speed);
+        }
+
+        .nav-item:hover, .nav-item.active {
+            background-color: #f1f8f4;
+            color: var(--if-green);
+        }
+
+        .nav-item:hover i, .nav-item.active i {
+            color: var(--if-green);
+        }
+
+        .nav-item.active::before {
+            content: '';
+            position: absolute;
+            left: 0;
+            top: 0;
+            height: 100%;
+            width: 4px;
+            background-color: var(--if-green);
+            border-radius: 0 4px 4px 0;
+        }
+
+        .sidebar-footer {
+            padding: 20px 24px;
+            border-top: 1px solid #f1f2f6;
+            font-size: 0.8rem;
+            color: #a4b0be;
+        }
+
+        /* Main Content Layout */
+        .main-wrapper {
+            flex: 1;
+            margin-left: 260px;
+            display: flex;
+            flex-direction: column;
+            transition: margin-left var(--transition-speed);
+        }
+
+        .main-wrapper.sidebar-collapsed {
+            margin-left: 70px;
+        }
+
+        .topbar {
+            height: 70px;
+            background-color: white;
+            padding: 0 30px;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.02);
+            z-index: 90;
+        }
+
+        .page-title {
+            font-size: 1.2rem;
+            font-weight: 600;
+            color: var(--text-color);
+        }
+
+        .topbar-actions {
+            display: flex;
+            align-items: center;
+            gap: 15px;
+        }
+
+        .user-profile {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            padding: 6px 12px;
+            background: #f1f2f6;
+            border-radius: 20px;
+            font-size: 0.9rem;
+            font-weight: 500;
+            cursor: pointer;
+            transition: background 0.2s;
+        }
+
+        .user-profile:hover { background: #eccc; background: #dfe4ea; }
+        
+        .user-avatar {
+            width: 30px; height: 30px; border-radius: 50%; background: var(--if-green); color: white;
+            display: flex; align-items: center; justify-content: center; font-size: 0.8rem;
+        }
+
+        .content {
+            padding: 30px;
+            flex: 1;
+        }
+
+        /* Utilities */
+        .btn-primary {
+            background-color: var(--if-green);
+            color: white;
+            padding: 10px 20px;
+            border-radius: 6px;
+            text-decoration: none;
+            font-weight: 600;
+            display: inline-flex;
+            align-items: center;
+            gap: 8px;
+            transition: all var(--transition-speed);
+            border: none;
+            cursor: pointer;
+            box-shadow: 0 4px 10px rgba(46, 139, 87, 0.2);
+        }
+
+        .btn-primary:hover {
+            background-color: var(--if-green-dark);
+            transform: translateY(-2px);
+            box-shadow: 0 6px 15px rgba(46, 139, 87, 0.3);
+        }
+
+        /* Animations */
+        @keyframes fadeIn {
+            from { opacity: 0; transform: translateY(15px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+        
+        .animate-fade {
+            animation: fadeIn 0.4s ease-out forwards;
+        }
+
+        /* Alerts */
+        .alert {
+            padding: 15px; 
+            border-radius: 6px; 
+            margin-bottom: 15px; 
+            font-weight: 500; 
+            font-size: 0.95rem;
+            display: flex;
+            align-items: center;
+        }
+        .alert i { margin-right: 8px; font-size: 1.1rem; }
+        .alert-error {
+            background-color: #fcf4f4; 
+            color: #c0392b; 
+            border-left: 4px solid #c0392b;
+        }
+        .alert-success {
+            background-color: #f1f8f4; 
+            color: var(--if-green-dark); 
+            border-left: 4px solid var(--if-green);
+        }
+    </style>
+    {% block extra_css %}{% endblock %}
+</head>
+<body>
+
+    {% if IS_MANUAL_TEST %}
+    <!-- Banner de Ambiente de Teste -->
+    <div id="test-env-banner" style="
+        position: fixed;
+        top: 0;
+        left: 0;
+        right: 0;
+        z-index: 9999;
+        background: linear-gradient(135deg, #e65100, #f57c00);
+        color: white;
+        text-align: center;
+        padding: 6px 16px;
+        font-size: 0.85rem;
+        font-weight: 700;
+        letter-spacing: 1px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        gap: 10px;
+        box-shadow: 0 2px 8px rgba(230, 81, 0, 0.4);
+        font-family: 'Inter', sans-serif;
+    ">
+        <span style="
+            display: inline-block;
+            width: 8px;
+            height: 8px;
+            background: #ffeb3b;
+            border-radius: 50%;
+            animation: pulse-dot 1.5s ease-in-out infinite;
+        "></span>
+        <i class="fa-solid fa-flask-vial"></i>
+        AMBIENTE DE TESTE — As alterações aqui NÃO afetam a base oficial
+        <span style="
+            display: inline-block;
+            width: 8px;
+            height: 8px;
+            background: #ffeb3b;
+            border-radius: 50%;
+            animation: pulse-dot 1.5s ease-in-out infinite;
+        "></span>
+    </div>
+    <style>
+        @keyframes pulse-dot {
+            0%, 100% { opacity: 1; transform: scale(1); }
+            50% { opacity: 0.4; transform: scale(0.7); }
+        }
+        body { padding-top: 34px !important; }
+        .sidebar { top: 34px !important; height: calc(100% - 34px) !important; }
+    </style>
+    {% endif %}
+
+    <!-- Sidebar -->
+    {% if user.is_authenticated %}
+    <aside class="sidebar">
+        <div class="sidebar-header">
+            <a href="{% url 'organograma_list' %}" style="display: flex; align-items: center; text-decoration: none;">
+                <img src="{% static 'core/images/logo_ifmg.png' %}" alt="Logo IFMG" class="if-logo" style="object-fit: contain; background: white; padding: 2px;">
+                <div class="logo-text" style="margin-left: 12px; display: flex; flex-direction: column; align-items: center;">
+                    <div class="title" style="font-weight: 700; font-size: 1.1rem; color: var(--if-green-dark); line-height: 1;">OrgRepo</div>
+                    <div class="subtitle" style="font-size: 0.75rem; color: #95a5a6; letter-spacing: 1px;">IFMG</div>
+                </div>
+            </a>
+            <button type="button" onclick="toggleSidebar()" id="sidebarToggleButton" style="background: none; border: none; font-size: 1.1rem; color: #7f8c8d; cursor: pointer; display: flex; align-items: center; justify-content: center; transition: color 0.2s;">
+                <i class="fa-solid fa-bars"></i>
+            </button>
+        </div>
+        <style>#sidebarToggleButton:hover { color: var(--if-green); }</style>
+        
+        <nav class="nav-menu">
+            <a href="{% url 'organograma_list' %}" class="nav-item {% if request.resolver_match.url_name == 'organograma_list' or request.resolver_match.url_name == 'organograma_detail' %}active{% endif %}">
+                <i class="fa-solid fa-sitemap"></i> <span>Organogramas</span>
+            </a>
+            {% if user.is_authenticated %}
+            <a href="{% url 'solicitacao_list' %}" class="nav-item {% if request.resolver_match.url_name == 'solicitacao_list' %}active{% endif %}">
+                <i class="fa-solid fa-code-pull-request"></i> <span>Solicitações</span>
+            </a>
+            <a href="{% url 'historico_list' %}" class="nav-item {% if request.resolver_match.url_name == 'historico_list' %}active{% endif %}">
+                <i class="fa-regular fa-clock"></i> <span>Histórico</span>
+            </a>
+            {% endif %}
+            {% if request.user.is_staff %}
+            <!-- Menu Administração Retrátil -->
+            <div class="nav-item admin-item {% if '/configuracoes/' in request.path or '/admin/' in request.path %}active{% endif %}" style="cursor: pointer; display: flex;" onclick="toggleAdminMenu()">
+                <div style="display: flex; align-items: center; width: 100%; justify-content: inherit;">
+                    <i class="fa-solid fa-gear"></i> <span>Administração</span>
+                    <i class="fa-solid fa-chevron-down" id="admin-chevron" style="font-size: 0.8rem; margin-left: auto; transition: transform 0.2s; color: #a4b0be;"></i>
+                </div>
+            </div>
+            
+            <div id="admin-submenu" style="display: none; background: #fafbfc; border-left: 3px solid var(--if-green); margin-bottom: 5px;">
+                <a href="{% url 'cargo_list' %}" class="nav-item {% if request.resolver_match.url_name == 'cargo_list' %}active{% endif %}" style="padding-left: 45px; font-size: 0.85rem;">
+                    <i class="fa-solid fa-id-card" style="font-size: 0.9rem;"></i> <span>Cargos e Funções</span>
+                </a>
+                <a href="{% url 'tipo_unidade_list' %}" class="nav-item {% if request.resolver_match.url_name == 'tipo_unidade_list' %}active{% endif %}" style="padding-left: 45px; font-size: 0.85rem;">
+                    <i class="fa-solid fa-sitemap" style="font-size: 0.9rem;"></i> <span>Tipos de Unidade</span>
+                </a>
+                <a href="{% url 'regimento_campus_list' %}" class="nav-item {% if 'regimento_campus' in request.resolver_match.url_name %}active{% endif %}" style="padding-left: 45px; font-size: 0.85rem;">
+                    <i class="fa-solid fa-scale-balanced" style="font-size: 0.9rem;"></i> <span>Regimentos</span>
+                </a>
+                <a href="{% url 'resolucao_estrutura_list' %}" class="nav-item {% if 'resolucao_estrutura' in request.resolver_match.url_name %}active{% endif %}" style="padding-left: 45px; font-size: 0.85rem;">
+                    <i class="fa-solid fa-file-signature" style="font-size: 0.9rem;"></i> <span>Resoluções de Estrutura</span>
+                </a>
+                <a href="{% url 'modelo_referencial_list' %}" class="nav-item {% if '/configuracoes/modelos/' in request.path %}active{% endif %}" style="padding-left: 45px; font-size: 0.85rem;" title="Modelos Referenciais (Resolução 44/2025)">
+                    <i class="fa-solid fa-rectangle-list" style="font-size: 0.9rem;"></i> <span>Modelos Referenciais</span>
+                </a>
+                <a href="{% url 'usuario_list' %}" class="nav-item {% if 'usuario' in request.resolver_match.url_name %}active{% endif %}" style="padding-left: 45px; font-size: 0.85rem;">
+                    <i class="fa-solid fa-users-gear" style="font-size: 0.9rem;"></i> <span>Usuários do Sistema</span>
+                </a>
+                <a href="{% url 'admin:index' %}" class="nav-item" style="padding-left: 45px; font-size: 0.85rem;">
+                    <i class="fa-solid fa-server" style="font-size: 0.9rem;"></i> <span>Django Admin</span>
+                </a>
+            </div>
+
+            <script>
+                function toggleAdminMenu() {
+                    const submenu = document.getElementById('admin-submenu');
+                    const chevron = document.getElementById('admin-chevron');
+                    if (submenu.style.display === 'none' || submenu.style.display === '') {
+                        submenu.style.display = 'block';
+                        chevron.style.transform = 'rotate(180deg)';
+                    } else {
+                        submenu.style.display = 'none';
+                        chevron.style.transform = 'rotate(0deg)';
+                    }
+                }
+                
+                // Manter aberto se estiver em uma rota administrativa
+                if (window.location.pathname.includes('/configuracoes/') || window.location.pathname.includes('/admin/')) {
+                    const submenu = document.getElementById('admin-submenu');
+                    if (submenu) submenu.style.display = 'block';
+                    const chevron = document.getElementById('admin-chevron');
+                    if (chevron) chevron.style.transform = 'rotate(180deg)';
+                }
+            </script>
+            {% endif %}
+        </nav>
+
+        <div class="sidebar-footer">
+            &copy; 2026 IFMG - OrgRepo v1.0
+            <div style="font-size: 0.7rem; color: #a4b0be; margin-top: 5px;">Developed by Matheus Costa Frade</div>
+        </div>
+    </aside>
+    {% endif %}
+
+    <!-- Main Content -->
+    <main class="main-wrapper" style="{% if not user.is_authenticated %}margin-left: 0;{% endif %}">
+        <header class="topbar">
+            <div style="display: flex; align-items: center; gap: 15px;">
+                <div style="display: flex; align-items: center; gap: 5px;">
+                    {% if not user.is_authenticated %}
+                    <a href="{% url 'organograma_list' %}" style="display: flex; align-items: center; text-decoration: none; gap: 5px;">
+                        <img src="{% static 'core/images/logo_ifmg.png' %}" alt="Logo IFMG" class="if-logo" style="width: 35px; height: 35px; object-fit: contain; background: white; padding: 2px; margin-right: 5px;">
+                        <div style="display: flex; flex-direction: column; align-items: center; margin-right: 10px;">
+                            <span style="font-weight: 700; color: var(--if-green-dark); font-size: 1rem; line-height: 1.1;">OrgRepo</span>
+                            <span style="font-size: 0.6rem; color: #95a5a6; letter-spacing: 0.5px;">IFMG</span>
+                        </div>
+                    </a>
+                    <div style="width: 1px; height: 25px; background-color: #f1f2f6; margin-right: 10px;"></div>
+                    {% endif %}
+                    <div class="page-title">
+                        {% block page_title %}Página Inicial{% endblock %}
+                    </div>
+                </div>
+            </div>
+            
+            <script>
+                function toggleSidebar() {
+                    const sidebar = document.querySelector('.sidebar');
+                    const wrapper = document.querySelector('.main-wrapper');
+                    if (!sidebar || !wrapper) return;
+                    
+                    const isCollapsed = sidebar.classList.toggle('collapsed');
+                    wrapper.classList.toggle('sidebar-collapsed');
+                    
+                    localStorage.setItem('sidebarState', isCollapsed ? 'collapsed' : 'expanded');
+                }
+                
+                // Aplicar estado inicial
+                (function() {
+                    const state = localStorage.getItem('sidebarState');
+                    if (state === 'collapsed') {
+                        document.addEventListener('DOMContentLoaded', () => {
+                            const sidebar = document.querySelector('.sidebar');
+                            const wrapper = document.querySelector('.main-wrapper');
+                            if (sidebar && wrapper) {
+                                sidebar.classList.add('collapsed');
+                                wrapper.classList.add('sidebar-collapsed');
+                            }
+                        });
+                    }
+                })();
+            </script>
+
+            <div class="topbar-actions">
+                {% if user.is_authenticated %}
+                    {% if request.user.is_staff and 'configuracoes' not in request.path and 'solicitacao' not in request.path and 'solicitacoes' not in request.path and 'historico' not in request.path %}
+                    <a href="{% url 'organograma_create' %}" class="btn-primary" style="padding: 8px 15px; font-size: 0.9rem; background-color: var(--if-green); text-decoration: none; margin-right: 15px;">
+                        <i class="fa-solid fa-plus"></i> Novo Organograma
+                    </a>
+                    {% endif %}
+                    <div class="user-profile" style="display: flex; align-items: center; gap: 10px;">
+                        <div class="user-avatar" style="background-color: var(--if-green); color: white;"><i class="fa-solid fa-user"></i></div>
+                        <div style="display: flex; flex-direction: column; align-items: flex-start; line-height: 1.2;">
+                            <span style="font-weight: 600; font-size: 0.9rem; color: #2c3e50;">{{ user.username }}</span>
+                            {% if user.is_staff %}
+                                <span style="font-size: 0.7rem; color: #0288d1;">Administrador</span>
+                            {% elif user.profile.campus %}
+                                <span style="font-size: 0.7rem; color: #2e7d32; white-space: nowrap;">Resp. {{ user.profile.campus.sigla }}</span>
+                            {% else %}
+                                <span style="font-size: 0.7rem; color: #747d8c;">Visitante</span>
+                            {% endif %}
+                        </div>
+                        <a href="{% url 'logout' %}" style="margin-left: 10px; color: #e74c3c; font-size: 1.1rem; text-decoration: none;" title="Sair">
+                            <i class="fa-solid fa-right-from-bracket"></i>
+                        </a>
+                    </div>
+                {% else %}
+                    <a href="{% url 'login' %}?next=/" style="text-decoration: none; display: flex; align-items: center; gap: 6px; color: white; font-weight: 600; background: var(--if-green); padding: 8px 15px; border-radius: 6px; font-size: 0.9rem;">
+                        <i class="fa-solid fa-arrow-right-to-bracket"></i> Entrar / Login
+                    </a>
+                {% endif %}
+            </div>
+        </header>
+
+        <section class="content">
+            {% if messages %}
+                <div style="margin-bottom: 20px;">
+                {% for message in messages %}
+                    <div class="alert {% if message.tags == 'error' %}alert-error{% else %}alert-success{% endif %}">
+                        <i class="fa-solid {% if message.tags == 'error' %}fa-circle-xmark{% else %}fa-circle-check{% endif %}"></i>
+                        <span>{{ message|safe }}</span>
+                    </div>
+                {% endfor %}
+                </div>
+            {% endif %}
+            
+            {% block content %}
+            {% endblock %}
+        </section>
+    </main>
+
+</body>
+</html>

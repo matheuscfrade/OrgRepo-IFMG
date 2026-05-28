@@ -1,0 +1,141 @@
+{% extends 'base.html' %}
+
+{% block title %}Gestão de Usuários | IFMG OrgRepo{% endblock %}
+{% block page_title %}Gestão de Usuários{% endblock %}
+
+{% block extra_css %}
+<style>
+    .admin-container {
+        background: white;
+        border-radius: 10px;
+        padding: 25px;
+        box-shadow: var(--card-shadow);
+    }
+    
+    .table-responsive {
+        width: 100%;
+        overflow-x: auto;
+    }
+    
+    .custom-table {
+        width: 100%;
+        border-collapse: collapse;
+        text-align: left;
+    }
+    
+    .custom-table th, .custom-table td {
+        padding: 12px 15px;
+        border-bottom: 1px solid #f1f2f6;
+    }
+    
+    .custom-table th {
+        background-color: #f8f9fa;
+        color: #2c3e50;
+        font-weight: 600;
+        font-size: 0.9rem;
+    }
+    
+    .custom-table tbody tr:hover {
+        background-color: #fafbfc;
+    }
+    
+    .badge-status {
+        font-size: 0.75rem;
+        padding: 4px 8px;
+        border-radius: 4px;
+        font-weight: 600;
+    }
+    .badge-admin {
+        background-color: #e1f5fe;
+        color: #0288d1;
+    }
+    .badge-campus {
+        background-color: #e8f5e9;
+        color: #2e7d32;
+    }
+    .badge-user {
+        background-color: #f5f5f5;
+        color: #616161;
+    }
+    
+    .btn-sm-action {
+        padding: 5px 10px;
+        border-radius: 4px;
+        font-size: 0.8rem;
+        text-decoration: none;
+        color: #747d8c;
+        border: 1px solid #dfe6e9;
+        transition: all 0.2s;
+        display: inline-flex;
+        align-items: center;
+        gap: 4px;
+    }
+    .btn-sm-action:hover {
+        background-color: #f1f2f6;
+        color: #2c3e50;
+        border-color: #b2bec3;
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="animate-fade">
+    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px;">
+        <p style="color: #7f8c8d;">Gerencie quem pode propor alterações ou administrar o sistema.</p>
+        <a href="{% url 'usuario_criar' %}" class="btn-primary" style="background-color: var(--if-green); text-decoration: none; font-size: 0.9rem; padding: 10px 15px;">
+            <i class="fa-solid fa-user-plus"></i> Novo Usuário
+        </a>
+    </div>
+
+    <div class="admin-container">
+        <div class="table-responsive">
+            <table class="custom-table">
+                <thead>
+                    <tr>
+                        <th>Nome de Usuário</th>
+                        <th>Email</th>
+                        <th>Perfil / Permissão</th>
+                        <th style="width: 80px; text-align: center;">Ações</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for u in usuarios %}
+                    <tr>
+                        <td style="font-weight: 500; color: #2c3e50;">{{ u.username }}</td>
+                        <td>{{ u.email|default:"-" }}</td>
+                        <td>
+                            {% if u.is_superuser %}
+                                <span class="badge-status badge-admin"><i class="fa-solid fa-shield"></i> Superadmin</span>
+                            {% elif u.is_staff %}
+                                <span class="badge-status badge-admin" style="background-color: #e0f2f1; color: #00796b;"><i class="fa-solid fa-shield-halved"></i> Admin</span>
+                            {% elif u.profile.campus %}
+                                <span class="badge-status badge-campus"><i class="fa-solid fa-building-columns"></i> Resp. {{ u.profile.campus.sigla }}</span>
+                            {% else %}
+                                <span class="badge-status badge-user">Visitante</span>
+                            {% endif %}
+                        </td>
+                        <td style="text-align: center;">
+                            <a href="{% url 'usuario_editar' u.pk %}" class="btn-sm-action" title="Editar">
+                                <i class="fa-solid fa-pen"></i> Editar
+                            </a>
+                            {% if u.pk != request.user.pk %}
+                            <form action="{% url 'usuario_excluir' u.pk %}" method="POST" style="display:inline; margin-left: 6px;" onsubmit="return confirm('Deseja realmente excluir este usuario? Esta acao nao pode ser desfeita.');">
+                                {% csrf_token %}
+                                <button type="submit" class="btn-sm-action" title="Excluir" style="color:#e74c3c; background:white; cursor:pointer;">
+                                    <i class="fa-solid fa-trash"></i> Excluir
+                                </button>
+                            </form>
+                            {% endif %}
+                        </td>
+                    </tr>
+                    {% empty %}
+                    <tr>
+                        <td colspan="4" style="text-align: center; color: #95a5a6; padding: 30px;">Nenhum usuário cadastrado.</td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+</div>
+{% endblock %}

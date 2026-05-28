@@ -1,0 +1,317 @@
+{% extends 'base.html' %}
+
+{% block title %}Detalhes da Solicitação #{{ solicitacao.id }} | IFMG OrgRepo{% endblock %}
+{% block page_title %}Comparativo de Alterações{% endblock %}
+
+{% block extra_css %}
+<style>
+    .detail-card {
+        background: white;
+        border-radius: 12px;
+        box-shadow: var(--card-shadow);
+        padding: 25px;
+        margin-bottom: 30px;
+        border-top: 4px solid var(--if-green);
+    }
+    .status-badge {
+        padding: 5px 12px;
+        border-radius: 15px;
+        font-size: 0.8rem;
+        font-weight: 600;
+        display: inline-block;
+        margin-bottom: 10px;
+    }
+    .badge-RASCUNHO { background: #f4f4f5; color: #606266; border: 1px solid #dcdfe6; }
+    .badge-EM_ANALISE { background: #fdf6ec; color: #e6a23c; border: 1px solid #f5dab1; }
+    .badge-ENVIADO_CONSUP { background: #eef6ff; color: #2f80ed; border: 1px solid #cfe5ff; }
+    .badge-DEVOLVIDO_CORRECAO { background: #fff8e1; color: #b7791f; border: 1px solid #f6d365; }
+    .badge-APROVADO { background: #f0f9eb; color: #67c23a; border: 1px solid #e1f3d8; }
+    .badge-REJEITADO { background: #fef0f0; color: #f56c6c; border: 1px solid #fde2e2; }
+
+    .diff-section {
+        margin-top: 30px;
+    }
+    .diff-category {
+        margin-bottom: 25px;
+        padding: 20px;
+        border-radius: 8px;
+        background: #fdfdfd;
+        border-left: 5px solid #bdc3c7;
+    }
+    .diff-added { border-left-color: #67c23a; background: #f0f9eb; }
+    .diff-removed { border-left-color: #f56c6c; background: #fef0f0; }
+    .diff-modified { border-left-color: #e6a23c; background: #fdf6ec; }
+
+    .diff-title {
+        font-weight: 600;
+        font-size: 1.1rem;
+        margin-bottom: 15px;
+        display: flex;
+        align-items: center;
+        gap: 8px;
+    }
+    .diff-added .diff-title { color: #67c23a; }
+    .diff-removed .diff-title { color: #f56c6c; }
+    .diff-modified .diff-title { color: #e6a23c; }
+
+    .change-item {
+        background: white;
+        padding: 12px 15px;
+        border-radius: 6px;
+        margin-bottom: 10px;
+        box-shadow: 0 1px 3px rgba(0,0,0,0.05);
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        border: 1px solid #eee;
+    }
+    .change-item:last-child { margin-bottom: 0; }
+
+    .change-field {
+        font-weight: 500;
+        color: #7f8c8d;
+        font-size: 0.85rem;
+    }
+    .change-values {
+        font-size: 0.9rem;
+    }
+    .old-val {
+        color: #95a5a6;
+        text-decoration: line-through;
+        margin-right: 8px;
+    }
+    .new-val {
+        color: var(--text-color);
+        font-weight: 600;
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="animate-fade">
+    <div style="margin-bottom: 20px;">
+        <a href="{% if next_url %}{{ next_url }}{% else %}{% url 'solicitacao_list' %}{% endif %}" style="text-decoration: none; color: #95a5a6; font-weight: 500;">
+            <i class="fa-solid fa-arrow-left"></i> Voltar para Lista
+        </a>
+    </div>
+
+    <!-- Info Card -->
+    <div class="detail-card">
+        <span class="status-badge badge-{{ solicitacao.status }}">
+            {{ solicitacao.get_status_display }}
+        </span>
+        <h2 style="margin: 5px 0 15px 0; color: var(--text-color);">Solicitação #{{ solicitacao.id }} - {{ solicitacao.organograma_original.campus.nome }}</h2>
+        
+        <div style="display: grid; grid-template-columns: repeat(3, 1fr); gap: 20px; font-size: 0.9rem; color: #7f8c8d; margin-bottom: 20px;">
+            <div><strong>Solicitante:</strong><br><span style="color:var(--text-color);">{{ solicitacao.usuario.username }}</span></div>
+            <div><strong>Data de Criação:</strong><br><span style="color:var(--text-color);">{{ solicitacao.data_criacao|date:"d/m/Y H:i" }}</span></div>
+            <div><strong>Original:</strong><br><a href="{% url 'organograma_detail' solicitacao.organograma_original.pk %}" target="_blank" style="color:var(--if-green); text-decoration:none;">Ver Original <i class="fa-solid fa-arrow-up-right-from-square" style="font-size:0.8rem;"></i></a></div>
+        </div>
+
+        {% if solicitacao.status == 'RASCUNHO' or solicitacao.status == 'DEVOLVIDO_CORRECAO' or user.is_superuser and solicitacao.status == 'ENVIADO_CONSUP' or user.is_staff and solicitacao.status == 'ENVIADO_CONSUP' %}
+        <div style="display: flex; gap: 10px; flex-wrap: wrap; margin-bottom: 18px;">
+            {% if solicitacao.status == 'RASCUNHO' or solicitacao.status == 'DEVOLVIDO_CORRECAO' or user.is_superuser and solicitacao.status == 'ENVIADO_CONSUP' or user.is_staff and solicitacao.status == 'ENVIADO_CONSUP' %}
+            <a href="{% url 'organograma_edit' solicitacao.organograma_proposto.pk %}?next={{ request.get_full_path|urlencode }}" class="btn-action btn-view" style="background:#eef6f1; color:var(--if-green); border-color:#cde7d6;">
+                <i class="fa-solid fa-file-pen"></i> Editar Metadados da Proposta
+            </a>
+            {% endif %}
+            {% if solicitacao.status == 'RASCUNHO' or solicitacao.status == 'DEVOLVIDO_CORRECAO' %}
+            <a href="{% url 'organograma_build' solicitacao.organograma_proposto.pk %}?next={{ request.get_full_path|urlencode }}" class="btn-action btn-view">
+                <i class="fa-solid fa-pen-ruler"></i> Ajustar Estrutura
+            </a>
+            <form method="post" action="{% url 'solicitacao_resubmit' solicitacao.id %}" onsubmit="return confirm('Enviar esta proposta para analise? Depois disso ela ficara bloqueada ate avaliacao ou devolucao.');">
+                {% csrf_token %}
+                <input type="hidden" name="next" value="{{ request.get_full_path }}">
+                <button type="submit" class="btn-action btn-approve" style="border:none; cursor:pointer;">
+                    <i class="fa-solid fa-paper-plane"></i> Enviar para Analise
+                </button>
+            </form>
+            {% if user.is_superuser or solicitacao.usuario == user %}
+            <form method="post" action="{% url 'solicitacao_delete' solicitacao.id %}" style="display:inline;" onsubmit="return confirm('Deseja realmente excluir este rascunho de proposta? Esta ação não pode ser desfeita.');">
+                {% csrf_token %}
+                <input type="hidden" name="next" value="{% url 'solicitacao_list' %}">
+                <button type="submit" class="btn-action btn-reject" style="border:none; cursor:pointer; background-color: #e74c3c; color: white;" title="Excluir Rascunho">
+                    <i class="fa-solid fa-trash"></i> Excluir Rascunho
+                </button>
+            </form>
+            {% endif %}
+            {% endif %}
+        </div>
+        {% endif %}
+
+        <div style="background: #f8f9fa; padding: 15px; border-radius: 6px; border: 1px solid #e9ecef;">
+            <strong style="display:block; margin-bottom: 5px; color: #495057;">Justificativa:</strong>
+            <p style="margin: 0; color: #2c3e50; line-height: 1.5;">{{ solicitacao.justificativa }}</p>
+        </div>
+        {% if solicitacao.justificativa_avaliador %}
+        <div style="background: #fff8e1; padding: 15px; border-radius: 6px; border: 1px solid #f6d365; margin-top: 12px;">
+            <strong style="display:block; margin-bottom: 5px; color: #7a4b00;">Justificativa do Avaliador:</strong>
+            <p style="margin: 0; color: #2c3e50; line-height: 1.5;">{{ solicitacao.justificativa_avaliador }}</p>
+        </div>
+        {% endif %}
+    </div>
+
+    <!-- Diff Section -->
+    <div class="diff-section">
+        <h3 style="margin-bottom: 20px; color: var(--text-color); border-bottom: 2px solid #eee; padding-bottom: 10px;">Resumo das Alterações Propostas</h3>
+
+        <!-- 🟢 Adicionados -->
+        {% if added %}
+        <div class="diff-category diff-added">
+            <div class="diff-title"><i class="fa-solid fa-circle-plus"></i> Setores Adicionados ({{ added|length }})</div>
+            {% for unit in added %}
+            <div class="change-item">
+                <div>
+                    <strong>{{ unit.sigla_unidade }}</strong> - {{ unit.nome_unidade }}
+                    <div style="font-size: 0.8rem; color: #7f8c8d;">Tipo: {{ unit.tipo_unidade.nome|default:"-" }} | Cargo: {{ unit.cargo_funcao_ref.nome|default:"-" }}</div>
+                </div>
+            </div>
+            {% endfor %}
+        </div>
+        {% endif %}
+
+        <!-- 🔴 Removidos -->
+        {% if removed %}
+        <div class="diff-category diff-removed">
+            <div class="diff-title"><i class="fa-solid fa-circle-minus"></i> Setores Removidos ({{ removed|length }})</div>
+            {% for unit in removed %}
+            <div class="change-item">
+                <div>
+                    <strong>{{ unit.sigla_unidade }}</strong> - {{ unit.nome_unidade }}
+                    <div style="font-size: 0.8rem; color: #e74c3c;">Será excluído da estrutura.</div>
+                </div>
+            </div>
+            {% endfor %}
+        </div>
+        {% endif %}
+
+        <!-- 🟡 Modificados -->
+        {% if modified %}
+        <div class="diff-category diff-modified">
+            <div class="diff-title"><i class="fa-solid fa-circle-exclamation"></i> Setores Modificados ({{ modified|length }})</div>
+            {% for item in modified %}
+            <div style="margin-bottom: 15px; background: white; border: 1px solid #f5dab1; border-radius: 8px; overflow: hidden; box-shadow: 0 2px 4px rgba(0,0,0,0.02);">
+                <div style="background: #fdf6ec; padding: 10px 15px; border-bottom: 1px solid #f5dab1; font-weight: 600; color: #e6a23c;">
+                    {{ item.unit.sigla_unidade }} - {{ item.unit.nome_unidade }}
+                </div>
+                <div style="padding: 15px;">
+                    {% for change in item.changes %}
+                    <div style="display: grid; grid-template-columns: 120px 1fr; margin-bottom: 8px; font-size: 0.9rem;">
+                        <span class="change-field">{{ change.field }}:</span>
+                        <div class="change-values">
+                            <span class="old-val">{{ change.old }}</span>
+                            <i class="fa-solid fa-arrow-right" style="font-size:0.8rem; color:#bdc3c7; margin-right: 5px;"></i>
+                            <span class="new-val">{{ change.new }}</span>
+                        </div>
+                    </div>
+                    {% endfor %}
+                </div>
+            </div>
+            {% endfor %}
+        </div>
+        {% endif %}
+
+        {% if not added and not removed and not modified %}
+        <div style="text-align: center; color: #bdc3c7; padding: 40px; background: white; border-radius: 12px; box-shadow: var(--card-shadow);">
+            <i class="fa-solid fa-equals" style="font-size: 3rem; margin-bottom: 10px;"></i>
+            <p>Nenhuma alteração de conteúdo detectada. (Apenas reordenação ou sem edições)</p>
+        </div>
+        {% endif %}
+    </div>
+
+    <!-- Actions Footer -->
+    {% if solicitacao.status == 'EM_ANALISE' and user.is_superuser or solicitacao.status == 'EM_ANALISE' and user.is_staff %}
+    <div style="margin-top: 30px; display: flex; gap: 15px; justify-content: flex-end; background: white; padding: 20px; border-radius: 12px; box-shadow: var(--card-shadow);">
+        <form method="post" action="{% url 'solicitacao_approve' solicitacao.id %}" onsubmit="if(confirm('Enviar esta proposta para aprovacao no CONSUP? O organograma vigente continuara oficial.')){ this.querySelector('button').innerHTML = '<i class=\'fa-solid fa-spinner fa-spin\'></i> Enviando...'; return true; } return false;">
+            {% csrf_token %}
+            <input type="hidden" name="next" value="{% if next_url %}{{ next_url }}{% else %}{% url 'solicitacao_list' %}{% endif %}">
+            <button type="submit" class="btn-action btn-approve" style="border:none; cursor:pointer; font-size:1rem; padding: 10px 20px;"><i class="fa-solid fa-paper-plane"></i> Enviar para CONSUP</button>
+        </form>
+        <form method="post" action="{% url 'solicitacao_reject' solicitacao.id %}" data-rejection-form>
+            {% csrf_token %}
+            <input type="hidden" name="next" value="{% if next_url %}{{ next_url }}{% else %}{% url 'solicitacao_list' %}{% endif %}">
+            <input type="hidden" name="justificativa_avaliador" data-rejection-justification>
+            <input type="hidden" name="acao_rejeicao" data-rejection-action-input>
+            <button type="button" data-rejection-action="devolver_correcao" data-rejection-label="Devolver para Correção" class="btn-action" style="border:none; cursor:pointer; font-size:1rem; padding: 10px 20px; background-color: #f39c12; color: white;"><i class="fa-solid fa-rotate-left"></i> Devolver para Correção</button>
+            <button type="button" data-rejection-action="rejeitar" data-rejection-label="Rejeitar Definitivamente" class="btn-action btn-reject" style="border:none; cursor:pointer; font-size:1rem; padding: 10px 20px; background-color: #e74c3c;"><i class="fa-solid fa-xmark"></i> Rejeitar Definitivamente</button>
+        </form>
+    </div>
+    {% elif solicitacao.status == 'ENVIADO_CONSUP' and user.is_superuser or solicitacao.status == 'ENVIADO_CONSUP' and user.is_staff %}
+    <div style="margin-top: 30px; display: flex; gap: 15px; justify-content: flex-end; background: white; padding: 20px; border-radius: 12px; box-shadow: var(--card-shadow);">
+        <form method="post" action="{% url 'solicitacao_approve' solicitacao.id %}" onsubmit="if(confirm('Registrar aprovacao final do CONSUP? Propostas estruturais exigem nova resolucao; propostas apenas de competencias exigem novo regimento.')){ this.querySelector('button').innerHTML = '<i class=\'fa-solid fa-spinner fa-spin\'></i> Aprovando...'; return true; } return false;">
+            {% csrf_token %}
+            <input type="hidden" name="next" value="{% if next_url %}{{ next_url }}{% else %}{% url 'solicitacao_list' %}{% endif %}">
+            <button type="submit" class="btn-action btn-approve" style="border:none; cursor:pointer; font-size:1rem; padding: 10px 20px;"><i class="fa-solid fa-check"></i> Registrar Aprovação do CONSUP</button>
+        </form>
+        <form method="post" action="{% url 'solicitacao_reject' solicitacao.id %}" data-rejection-form>
+            {% csrf_token %}
+            <input type="hidden" name="next" value="{% if next_url %}{{ next_url }}{% else %}{% url 'solicitacao_list' %}{% endif %}">
+            <input type="hidden" name="justificativa_avaliador" data-rejection-justification>
+            <input type="hidden" name="acao_rejeicao" data-rejection-action-input>
+            <button type="button" data-rejection-action="devolver_correcao" data-rejection-label="Devolver para Correção" class="btn-action" style="border:none; cursor:pointer; font-size:1rem; padding: 10px 20px; background-color: #f39c12; color: white;"><i class="fa-solid fa-rotate-left"></i> Devolver para Correção</button>
+            <button type="button" data-rejection-action="rejeitar" data-rejection-label="Rejeitar Definitivamente" class="btn-action btn-reject" style="border:none; cursor:pointer; font-size:1rem; padding: 10px 20px; background-color: #e74c3c;"><i class="fa-solid fa-xmark"></i> Rejeitar Definitivamente</button>
+        </form>
+    </div>
+    {% endif %}
+    {% comment %}
+    <div style="margin-top: 30px; display: flex; gap: 15px; justify-content: flex-end; background: white; padding: 20px; border-radius: 12px; box-shadow: var(--card-shadow);">
+        <form method="post" action="{% url 'solicitacao_approve' solicitacao.id %}" onsubmit="if(confirm('Confirmar a aprovação? O organograma atual será desativado e substituído por esta proposta.')){ this.querySelector('button').innerHTML = '<i class=\'fa-solid fa-spinner fa-spin\'></i> Aprovando...'; return true; } return false;">
+            {% csrf_token %}
+            <input type="hidden" name="next" value="{% if next_url %}{{ next_url }}{% else %}{% url 'solicitacao_list' %}{% endif %}">
+            <button type="submit" class="btn-action btn-approve" style="border:none; cursor:pointer; font-size:1rem; padding: 10px 20px;"><i class="fa-solid fa-check"></i> Aprovar Alteração</button>
+        </form>
+        <form method="post" action="{% url 'solicitacao_reject' solicitacao.id %}" onsubmit="if(confirm('Confirmar rejeição da proposta?')){ this.querySelector('button').innerHTML = '<i class=\'fa-solid fa-spinner fa-spin\'></i> Rejeitando...'; return true; } return false;">
+            {% csrf_token %}
+            <input type="hidden" name="next" value="{% if next_url %}{{ next_url }}{% else %}{% url 'solicitacao_list' %}{% endif %}">
+            <button type="submit" class="btn-action btn-reject" style="border:none; cursor:pointer; font-size:1rem; padding: 10px 20px; background-color: #e74c3c;"><i class="fa-solid fa-xmark"></i> Rejeitar</button>
+        </form>
+    </div>
+    {% endcomment %}
+</div>
+<script>
+async function openEvaluatorJustificationPopup(form, action, label) {
+    const title = label || 'Registrar decisão';
+    let justification = '';
+    if (window.Swal) {
+        const result = await Swal.fire({
+            title,
+            input: 'textarea',
+            inputLabel: 'Justificativa do avaliador',
+            inputPlaceholder: 'Informe a justificativa que será exibida ao demandante.',
+            inputAttributes: { 'aria-label': 'Justificativa do avaliador' },
+            showCancelButton: true,
+            confirmButtonText: 'Confirmar',
+            cancelButtonText: 'Cancelar',
+            confirmButtonColor: action === 'rejeitar' ? '#e74c3c' : '#f39c12',
+            inputValidator: (value) => {
+                if (!value || !value.trim()) {
+                    return 'Informe a justificativa do avaliador.';
+                }
+            }
+        });
+        if (!result.isConfirmed) return;
+        justification = result.value.trim();
+    } else {
+        const value = window.prompt('Justificativa do avaliador');
+        if (!value || !value.trim()) return;
+        justification = value.trim();
+    }
+
+    form.querySelector('[data-rejection-justification]').value = justification;
+    form.querySelector('[data-rejection-action-input]').value = action;
+    form.submit();
+}
+
+document.addEventListener('click', (event) => {
+    const button = event.target.closest('[data-rejection-action]');
+    if (!button) return;
+    const form = button.closest('[data-rejection-form]');
+    if (!form) return;
+    openEvaluatorJustificationPopup(
+        form,
+        button.dataset.rejectionAction,
+        button.dataset.rejectionLabel
+    );
+});
+</script>
+{% endblock %}

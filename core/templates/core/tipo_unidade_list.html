@@ -1,0 +1,62 @@
+{% extends 'base.html' %}
+
+{% block title %}Tipos de Unidade | IFMG OrgRepo{% endblock %}
+
+{% block content %}
+<div class="animate-fade" style="max-width: 650px; margin: 20px auto;">
+    <div style="margin-bottom: 20px; display: flex; justify-content: space-between; align-items: center;">
+        <h3 style="color: var(--if-green); font-weight: 600;"><i class="fa-solid fa-sitemap"></i> Tipos de Departamento</h3>
+        <a href="javascript:history.back()" style="text-decoration: none; color: #7f8c8d; font-weight: 500;">
+            <i class="fa-solid fa-arrow-left"></i> Voltar
+        </a>
+    </div>
+
+    <div style="background: white; border-radius: 8px; border: 1px solid #e1e4e8; padding: 25px; box-shadow: 0 2px 5px rgba(0,0,0,0.05); display: flex; flex-direction: column;">
+        <div style="flex: 1; overflow-y: auto; max-height: 450px; margin-bottom: 20px;">
+            <table class="table" style="font-size: 0.9rem; width: 100%; border-collapse: collapse;">
+                <thead>
+                    <tr style="background: #f8f9fa; border-bottom: 2px solid #e1e4e8;">
+                        <th style="padding: 12px 10px; text-align: left; color: #2c3e50;">Nome do Tipo</th>
+                        <th style="padding: 12px 10px; text-align: left; color: #2c3e50;">Cargo Ocupante</th>
+                        <th style="padding: 12px 10px; text-align: center; color: #2c3e50;">Ações</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for tipo in tipos %}
+                    <tr style="border-bottom: 1px solid #eee;">
+                        <td style="padding: 12px 10px; font-weight: 500; color: #2c3e50;">{{ tipo.nome }}</td>
+                        <td style="padding: 12px 10px; color: #7f8c8d;">
+                            {% if tipo.cargo_padrao %}
+                                {{ tipo.cargo_padrao.nome }} <span style="font-size: 0.8rem; color: #95a5a6;">({{ tipo.cargo_padrao.sigla }})</span>
+                            {% else %}
+                                <em style="color: #bdc3c7;">Não informado</em>
+                            {% endif %}
+                        </td>
+                        <td style="padding: 12px 10px; text-align: center;">
+                            <a href="{% url 'tipo_unidade_editar' tipo.id %}" style="color: #3498db; text-decoration: none;" title="Editar"><i class="fa-solid fa-pen"></i></a>
+                        </td>
+                    </tr>
+                    {% empty %}
+                    <tr><td colspan="3" style="text-align:center; padding: 25px; color:#95a5a6;">Nenhum tipo cadastrado</td></tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+
+        <hr style="border-top: 1px solid #eee; margin-bottom: 20px;">
+        <h5 style="color: #34495e; margin-bottom: 15px; font-weight: 600;"><i class="fa-solid fa-plus-circle"></i> Adicionar Novo Tipo</h5>
+        <form method="post" style="display: flex; flex-direction: column; gap: 12px;">
+            {% csrf_token %}
+            <div>
+                <label style="display: block; font-weight: 600; font-size: 0.85rem; margin-bottom: 4px; color: #2c3e50;">Nome do Tipo:</label>
+                {{ form_tipo.nome }}
+            </div>
+            <div>
+                <label style="display: block; font-weight: 600; font-size: 0.85rem; margin-bottom: 4px; color: #2c3e50;">Cargo Ocupante Padrão:</label>
+                {{ form_tipo.cargo_padrao }}
+            </div>
+            <button type="submit" class="btn-submit" style="background: var(--if-green); width: 100%; padding: 12px;"><i class="fa-solid fa-plus"></i> Salvar Tipo</button>
+        </form>
+    </div>
+</div>
+{% endblock %}

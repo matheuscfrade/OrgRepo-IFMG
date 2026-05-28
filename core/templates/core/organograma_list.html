@@ -1,0 +1,664 @@
+{% extends 'base.html' %}
+
+{% block title %}Organogramas Oficiais | IFMG OrgRepo{% endblock %}
+{% block page_title %}Repositório de Organogramas Oficiais{% endblock %}
+
+{% block extra_css %}
+<style>
+    .grid-container {
+        display: grid;
+        grid-template-columns: repeat(auto-fill, minmax(320px, 1fr));
+        gap: 25px;
+    }
+
+    .org-card {
+        background: #ffffff;
+        border-radius: 10px;
+        padding: 25px;
+        border-top: 4px solid var(--if-green);
+        box-shadow: var(--card-shadow);
+        transition: transform 0.2s, box-shadow 0.2s;
+        display: flex;
+        flex-direction: column;
+    }
+
+    .org-card:hover {
+        transform: translateY(-5px);
+        box-shadow: 0 8px 25px rgba(0,0,0,0.08);
+    }
+
+    .card-header {
+        display: flex;
+        align-items: center;
+        gap: 15px;
+        margin-bottom: 20px;
+    }
+
+    .campus-icon {
+        width: 48px;
+        height: 48px;
+        background-color: #f1f8f4;
+        color: var(--if-green);
+        border-radius: 12px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-size: 1.5rem;
+    }
+
+    .campus-details h3 {
+        color: var(--text-color);
+        font-size: 1.1rem;
+        margin-bottom: 4px;
+        font-weight: 600;
+    }
+
+    .campus-details .badge {
+        font-size: 0.75rem;
+        background-color: #e8f5e9;
+        color: var(--if-green-dark);
+        padding: 4px 8px;
+        border-radius: 4px;
+        font-weight: 600;
+    }
+
+    .card-body {
+        flex: 1;
+        font-size: 0.95rem;
+        color: #7f8c8d;
+        margin-bottom: 25px;
+    }
+    
+    .info-row {
+        display: flex;
+        align-items: flex-start;
+        gap: 12px;
+        margin-bottom: 12px;
+        width: 100%;
+    }
+    
+    .info-row i {
+        color: #bdc3c7;
+        width: 18px;
+        flex-shrink: 0;
+        text-align: center;
+        margin-top: 3px;
+    }
+
+    .info-body {
+        flex: 1;
+        min-width: 0;
+        line-height: 1.4;
+    }
+
+    .info-label {
+        font-weight: 700;
+        color: var(--text-color);
+        display: inline;
+    }
+
+    .info-value {
+        color: #7f8c8d;
+        display: inline;
+    }
+
+    .info-actions {
+        display: flex;
+        gap: 8px;
+        flex-shrink: 0;
+        margin-left: 8px;
+        margin-top: 1px;
+    }
+
+    .info-actions a {
+        transition: transform 0.2s;
+    }
+
+    .info-actions a:hover {
+        transform: scale(1.1);
+    }
+
+    .card-footer {
+        margin-top: auto;
+    }
+
+    .btn-outline {
+        display: block;
+        text-align: center;
+        padding: 10px 15px;
+        background: transparent;
+        color: var(--if-green);
+        border: 2px solid var(--if-green);
+        border-radius: 6px;
+        font-weight: 600;
+        text-decoration: none;
+        transition: all var(--transition-speed);
+    }
+
+    .btn-outline:hover {
+        background: var(--if-green);
+        color: white;
+    }
+    
+    .btn-disabled {
+        border-color: #bdc3c7;
+        color: #95a5a6;
+        cursor: not-allowed;
+    }
+    .btn-disabled:hover { background: transparent; color: #95a5a6; }
+
+    .empty-state {
+        text-align: center;
+        padding: 60px 20px;
+        background: white;
+        border-radius: 10px;
+        box-shadow: var(--card-shadow);
+        grid-column: 1 / -1;
+    }
+    .empty-state i {
+        font-size: 3rem;
+        color: #bdc3c7;
+        margin-bottom: 15px;
+    }
+    .empty-state p {
+        color: #7f8c8d;
+        font-size: 1.1rem;
+    }
+    .btn-doc {
+        display: inline-flex;
+        align-items: center;
+        gap: 8px;
+        padding: 6px 12px;
+        background: #f1f2f6;
+        color: #2f3542;
+        border-radius: 6px;
+        text-decoration: none;
+        font-size: 0.8rem;
+        font-weight: 600;
+        transition: all 0.2s;
+        border: 1px solid #dfe4ea;
+    }
+    .btn-doc:hover {
+        background: var(--if-green);
+        color: white;
+        border-color: var(--if-green);
+        transform: translateY(-1px);
+    }
+    .btn-doc i {
+        font-size: 1rem;
+        color: var(--if-green);
+    }
+    .btn-doc:hover i {
+        color: white;
+    }
+    .quota-list {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 6px;
+        margin-top: 6px;
+    }
+    .quota-pill {
+        display: inline-flex;
+        align-items: center;
+        gap: 5px;
+        border-radius: 6px;
+        padding: 4px 7px;
+        background: #eef6f1;
+        color: #1f7a3f;
+        font-weight: 700;
+        font-size: 0.76rem;
+        border: 1px solid #cde7d6;
+    }
+    .quota-pill.exceeded {
+        background: #fff1f0;
+        color: #b42318;
+        border-color: #f4b8b3;
+    }
+    .quota-pill.unallocated {
+        background: #fff7e6;
+        color: #8a5b00;
+        border-color: #f6d28b;
+    }
+    .quota-alert {
+        margin-top: 7px;
+        color: #8a5b00;
+        font-weight: 700;
+        font-size: 0.76rem;
+    }
+    .filter-panel {
+        background: white;
+        border: 1px solid #e8edf2;
+        border-radius: 8px;
+        padding: 18px;
+        margin-bottom: 24px;
+        box-shadow: var(--card-shadow);
+    }
+    .filter-grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(170px, 1fr));
+        gap: 14px;
+        align-items: end;
+    }
+    .filter-field label {
+        display: block;
+        font-size: 0.78rem;
+        font-weight: 700;
+        color: #596275;
+        margin-bottom: 5px;
+    }
+    .filter-field input,
+    .filter-field select {
+        width: 100%;
+        border: 1px solid #dfe4ea;
+        border-radius: 6px;
+        padding: 9px 10px;
+        color: var(--text-color);
+        background: white;
+    }
+    .filter-actions {
+        display: flex;
+        gap: 8px;
+        flex-wrap: wrap;
+        grid-column: 1 / -1;
+        justify-content: flex-end;
+        padding-top: 2px;
+    }
+    .filter-actions button,
+    .filter-actions a {
+        min-height: 38px;
+        border-radius: 6px;
+        padding: 9px 14px;
+        font-weight: 700;
+        text-decoration: none;
+        border: 1px solid var(--if-green);
+        cursor: pointer;
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        gap: 6px;
+    }
+    .filter-actions button {
+        background: var(--if-green);
+        color: white;
+    }
+    .filter-actions a {
+        color: #596275;
+        border-color: #dfe4ea;
+        background: #f8fafc;
+    }
+    @media (max-width: 760px) {
+        .filter-grid {
+            grid-template-columns: 1fr;
+        }
+        .filter-actions {
+            justify-content: stretch;
+        }
+        .filter-actions button,
+        .filter-actions a {
+            flex: 1 1 120px;
+        }
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="animate-fade">
+    <form method="get" class="filter-panel">
+        <div class="filter-grid">
+            <div class="filter-field">
+                <label for="filter-q">Busca</label>
+                <input id="filter-q" type="search" name="q" value="{{ request.GET.q }}" placeholder="Campus, sigla ou documento">
+            </div>
+            <div class="filter-field">
+                <label for="filter-campus">Campus</label>
+                <select id="filter-campus" name="campus">
+                    <option value="">Todos</option>
+                    {% for campus in campus_options %}
+                    <option value="{{ campus.id }}" {% if request.GET.campus == campus.id|stringformat:"s" %}selected{% endif %}>{{ campus.sigla }} - {{ campus.nome }}</option>
+                    {% endfor %}
+                </select>
+            </div>
+            <div class="filter-field">
+                <label for="filter-dimensionamento">Dimensionamento</label>
+                <select id="filter-dimensionamento" name="dimensionamento">
+                    <option value="">Todos</option>
+                    {% for dimensionamento in dimensionamento_options %}
+                    <option value="{{ dimensionamento.id }}" {% if request.GET.dimensionamento == dimensionamento.id|stringformat:"s" %}selected{% endif %}>{{ dimensionamento.nome }}</option>
+                    {% endfor %}
+                </select>
+            </div>
+            <div class="filter-field">
+                <label for="filter-modelo">Modelo</label>
+                <select id="filter-modelo" name="modelo">
+                    <option value="">Todos</option>
+                    {% for modelo in modelo_options %}
+                    <option value="{{ modelo.id }}" {% if request.GET.modelo == modelo.id|stringformat:"s" %}selected{% endif %}>{{ modelo.nome }}</option>
+                    {% endfor %}
+                </select>
+            </div>
+            <div class="filter-field">
+                <label for="filter-documento">Documento</label>
+                <select id="filter-documento" name="documento">
+                    <option value="">Todos</option>
+                    <option value="resolucao" {% if request.GET.documento == 'resolucao' %}selected{% endif %}>Resolucao</option>
+                    <option value="regimento_interno" {% if request.GET.documento == 'regimento_interno' %}selected{% endif %}>Regimento interno</option>
+                    <option value="regimento_geral" {% if request.GET.documento == 'regimento_geral' %}selected{% endif %}>Regimento geral</option>
+                </select>
+            </div>
+            <div class="filter-field">
+                <label for="filter-doc-status">Situacao documental</label>
+                <select id="filter-doc-status" name="doc_status">
+                    <option value="">Todas</option>
+                    <option value="com_documento" {% if request.GET.doc_status == 'com_documento' %}selected{% endif %}>Com documento/link</option>
+                    <option value="sem_documento" {% if request.GET.doc_status == 'sem_documento' %}selected{% endif %}>Sem documento/link</option>
+                </select>
+            </div>
+            {% if request.user.is_authenticated %}
+            <div class="filter-field">
+                <label for="filter-status">Situacao</label>
+                <select id="filter-status" name="status">
+                    <option value="">Todas</option>
+                    <option value="oficial" {% if request.GET.status == 'oficial' %}selected{% endif %}>Oficial</option>
+                    <option value="rascunho" {% if request.GET.status == 'rascunho' %}selected{% endif %}>Rascunho</option>
+                    <option value="oficial_com_proposta" {% if request.GET.status == 'oficial_com_proposta' %}selected{% endif %}>Oficial com proposta</option>
+                </select>
+            </div>
+            <div class="filter-field">
+                <label for="filter-scope">Escopo</label>
+                <select id="filter-scope" name="scope">
+                    <option value="">Todos permitidos</option>
+                    <option value="meu_campus" {% if request.GET.scope == 'meu_campus' %}selected{% endif %}>Meu campus</option>
+                    <option value="meus_rascunhos" {% if request.GET.scope == 'meus_rascunhos' %}selected{% endif %}>Meus rascunhos</option>
+                </select>
+            </div>
+            <div class="filter-field">
+                <label for="filter-pendencia">Pendencia</label>
+                <select id="filter-pendencia" name="pendencia">
+                    <option value="">Todas</option>
+                    <option value="adequacao_modelo" {% if request.GET.pendencia == 'adequacao_modelo' %}selected{% endif %}>Adequacao ao modelo</option>
+                    <option value="competencias" {% if request.GET.pendencia == 'competencias' %}selected{% endif %}>Competencias pendentes</option>
+                    <option value="unidades_genericas" {% if request.GET.pendencia == 'unidades_genericas' %}selected{% endif %}>Unidades genericas</option>
+                </select>
+            </div>
+            {% endif %}
+            <div class="filter-field">
+                <label for="filter-ordenar">Ordenar</label>
+                <select id="filter-ordenar" name="ordenar">
+                    <option value="campus" {% if not request.GET.ordenar or request.GET.ordenar == 'campus' %}selected{% endif %}>Campus</option>
+                    <option value="recentes" {% if request.GET.ordenar == 'recentes' %}selected{% endif %}>Mais recentes</option>
+                    <option value="antigos" {% if request.GET.ordenar == 'antigos' %}selected{% endif %}>Mais antigos</option>
+                </select>
+            </div>
+            <div class="filter-actions">
+                <button type="submit"><i class="fa-solid fa-filter"></i> Filtrar</button>
+                <a href="{% url 'organograma_list' %}">Limpar</a>
+            </div>
+        </div>
+    </form>
+
+    {% if rascunhos %}
+    <div style="margin-top: 20px; margin-bottom: 20px;">
+        <h2 style="color: #34495e; font-size: 1.3rem; font-weight: 700; display: flex; align-items: center; gap: 10px;">
+            <i class="fa-solid fa-pen-ruler" style="color: #f39c12;"></i> Organogramas em Rascunho
+        </h2>
+        <p style="color: #7f8c8d; font-size: 0.9rem; margin-top: 4px;">Estes organogramas estão em construção e visíveis apenas para você.</p>
+    </div>
+    
+    <div class="grid-container" style="margin-bottom: 40px;">
+        {% for org in rascunhos %}
+        <div class="org-card" style="border-top-color: #f39c12;">
+            <div class="card-header">
+                <div class="campus-icon" style="background-color: #fff9ed; color: #f39c12;">
+                    <i class="fa-solid fa-compass-drafting"></i>
+                </div>
+                <div class="campus-details">
+                    <h3>{{ org.campus.nome }}</h3>
+                    <span class="badge" style="background-color: #fff5e6; color: #d35400;">{{ org.campus.sigla }}</span>
+                </div>
+            </div>
+            
+            <div class="card-body">
+                {% if org.precisa_adequacao_modelo %}
+                <div style="margin-bottom: 12px; padding: 10px 12px; border-radius: 8px; background: #fff7e6; color: #8a5b00; font-size: 0.82rem; border: 1px solid #f6d28b;">
+                    Este organograma usa uma revisão anterior do Modelo Referencial e precisa de adequação.
+                </div>
+                {% endif %}
+                {% if request.user.is_authenticated and org.competencias_resumo.tem_alertas %}
+                <div style="margin-bottom: 12px; padding: 10px 12px; border-radius: 8px; background: #fff3cd; color: #856404; font-size: 0.82rem; border: 1px solid #ffeeba;">
+                    <strong>Competências pendentes:</strong>
+                    {{ org.competencias_resumo.sem_competencias }} sem cadastro e
+                    {{ org.competencias_resumo.desatualizadas }} desatualizada(s).
+                </div>
+                {% endif %}
+                <div class="doc-buttons" style="display: flex; gap: 8px; flex-wrap: wrap; margin-bottom: 15px;">
+                    {% if org.resolucao_estrutura and org.resolucao_estrutura.arquivo %}
+                    <a href="{{ org.resolucao_estrutura.arquivo.url }}" target="_blank" class="btn-doc" title="{{ org.resolucao_estrutura.nome }}">
+                        <i class="fa-solid fa-file-pdf"></i> Resolução Estrutura Organizacional
+                    </a>
+                    {% elif org.resolucao_estrutura and org.resolucao_estrutura.link %}
+                    <a href="{{ org.resolucao_estrutura.link }}" target="_blank" class="btn-doc" title="{{ org.resolucao_estrutura.nome }}">
+                        <i class="fa-solid fa-arrow-up-right-from-square"></i> Resolução Estrutura Organizacional
+                    </a>
+                    {% elif org.documento_aprovacao %}
+                    <a href="{{ org.documento_aprovacao.url }}" target="_blank" class="btn-doc" title="{{ org.nome_documento_aprovacao }}">
+                        <i class="fa-solid fa-file-pdf"></i> Resolução Estrutura Organizacional
+                    </a>
+                    {% endif %}
+                    
+                    {% if org.campus.sigla == 'IFMG' and org.regimento_geral_referencia and org.regimento_geral_referencia.arquivo %}
+                    <a href="{{ org.regimento_geral_referencia.arquivo.url }}" target="_blank" class="btn-doc" title="{{ org.regimento_geral_referencia.nome }}">
+                        <i class="fa-solid fa-file-pdf"></i> Resolução Regimento Geral
+                    </a>
+                    {% elif org.campus.sigla == 'IFMG' and org.regimento_geral_referencia and org.regimento_geral_referencia.link %}
+                    <a href="{{ org.regimento_geral_referencia.link }}" target="_blank" class="btn-doc" title="{{ org.regimento_geral_referencia.nome }}">
+                        <i class="fa-solid fa-arrow-up-right-from-square"></i> Resolução Regimento Geral
+                    </a>
+                    {% elif org.campus.sigla == 'IFMG' and org.regimento_geral_arquivo %}
+                    <a href="{{ org.regimento_geral_arquivo.url }}" target="_blank" class="btn-doc" title="{{ org.nome_regimento_geral }}">
+                        <i class="fa-solid fa-file-pdf"></i> Resolução Regimento Geral
+                    </a>
+                    {% endif %}
+                    
+                    {% if org.regimento_referencia and org.regimento_referencia.arquivo %}
+                    <a href="{{ org.regimento_referencia.arquivo.url }}" target="_blank" class="btn-doc" title="{{ org.regimento_referencia.nome }}">
+                        <i class="fa-solid fa-file-pdf"></i> Portaria Regimento Interno
+                    </a>
+                    {% elif org.regimento_referencia and org.regimento_referencia.link %}
+                    <a href="{{ org.regimento_referencia.link }}" target="_blank" class="btn-doc" title="{{ org.regimento_referencia.nome }}">
+                        <i class="fa-solid fa-arrow-up-right-from-square"></i> Portaria Regimento Interno
+                    </a>
+                    {% elif org.regimento_arquivo %}
+                    <a href="{{ org.regimento_arquivo.url }}" target="_blank" class="btn-doc" title="{{ org.nome_regimento }}">
+                        <i class="fa-solid fa-file-pdf"></i> Portaria Regimento Interno
+                    </a>
+                    {% endif %}
+                </div>
+                <div class="info-row">
+                    <i class="fa-solid fa-circle" style="color: #f39c12;"></i>
+                    <div class="info-body">
+                        <span class="info-label">Status:</span>
+                        <span class="info-value">Rascunho</span>
+                    </div>
+                </div>
+                <div class="info-row">
+                    <i class="fa-solid fa-users"></i>
+                    <div class="info-body">
+                        <span class="info-label">Estrutura:</span>
+                        <span class="info-value">{{ org.unidades.count }} Unidades</span>
+                    </div>
+                </div>
+            </div>
+
+            {% if request.user.is_staff %}
+            <div class="card-footer" style="display: flex; gap: 8px; flex-wrap: wrap;">
+                <a href="{% url 'organograma_edit' org.pk %}" class="btn-outline" style="flex: 1 1 100%; border-color: #3498db; color: #3498db; background: transparent; display: flex; align-items: center; justify-content: center; font-size: 0.85rem; padding: 6px 10px;" title="Editar informações como Resolução, Regimento e Campus">
+                    <i class="fa-solid fa-pen-to-square"></i> Editar Metadados
+                </a>
+                <a href="{% url 'organograma_build' org.pk %}" class="btn-outline" style="flex: 1; border-color: #f39c12; color: #f39c12; background: transparent; display: flex; align-items: center; justify-content: center;">
+                    <i class="fa-solid fa-keyboard"></i> Estrutura
+                </a>
+                {% if org.has_pending_units %}
+                <a href="javascript:void(0)" class="btn-outline" style="flex: 1; background-color: #bdc3c7; color: white; border-color: #bdc3c7; display: flex; align-items: center; justify-content: center; opacity: 0.8; cursor: pointer;" 
+                   onclick="Swal.fire({title:'Publicação Bloqueada', text:'Este organograma possui unidades genéricas (Setor ou Seção) que precisam ser definidas no construtor antes da publicação.', icon:'warning', confirmButtonColor:'var(--if-green)'});">
+                    <i class="fa-solid fa-circle-exclamation"></i> Pendências
+                </a>
+                {% else %}
+                <a href="{% url 'organograma_publish' org.pk %}" class="btn-outline" style="flex: 1; background-color: var(--if-green); color: white; border-color: var(--if-green); display: flex; align-items: center; justify-content: center;" onclick="return confirm('Deseja publicar este organograma como Oficial? O organograma oficial atual deste campus será movido para o histórico.');">
+                    <i class="fa-solid fa-circle-check"></i> Publicar
+                </a>
+                {% endif %}
+                <form action="{% url 'organograma_delete' org.pk %}" method="POST" style="display:inline;" onsubmit="return confirm('Deseja realmente excluir este rascunho? Esta ação não pode ser desfeita.');">
+                    {% csrf_token %}
+                    <button type="submit" class="btn-outline" style="border-color: #e74c3c; color: #e74c3c; background: transparent; padding: 8px 12px; border-radius: 6px; cursor: pointer; display: flex; align-items: center; justify-content: center; width: 42px; height: 100%;" title="Excluir Rascunho">
+                        <i class="fa-solid fa-trash"></i>
+                    </button>
+                </form>
+            </div>
+            {% endif %}
+        </div>
+        {% endfor %}
+    </div>
+    <div style="margin-top: 40px; margin-bottom: 20px;">
+        <h2 style="color: #34495e; font-size: 1.3rem; font-weight: 700; display: flex; align-items: center; gap: 10px;">
+            <i class="fa-solid fa-circle-check" style="color: var(--if-green);"></i> Organogramas Oficiais
+        </h2>
+    </div>
+    {% endif %}
+
+    {% if organogramas %}
+    <div class="grid-container">
+        {% for org in organogramas %}
+        <div class="org-card">
+            <div class="card-header">
+                <div class="campus-icon">
+                    <i class="fa-solid fa-building-columns"></i>
+                </div>
+                <div class="campus-details">
+                    <h3>{{ org.campus.nome }}</h3>
+                    <span class="badge">{{ org.campus.sigla }}</span>
+                </div>
+            </div>
+            <div class="card-body">
+                {% if org.precisa_adequacao_modelo %}
+                <div style="margin-bottom: 12px; padding: 10px 12px; border-radius: 8px; background: #fff7e6; color: #8a5b00; font-size: 0.82rem; border: 1px solid #f6d28b;">
+                    Revisão do modelo pendente: o Modelo Referencial foi atualizado e este organograma ainda não foi adequado.
+                </div>
+                {% endif %}
+                {% if request.user.is_authenticated and org.competencias_resumo.tem_alertas %}
+                <div style="margin-bottom: 12px; padding: 10px 12px; border-radius: 8px; background: #fff3cd; color: #856404; font-size: 0.82rem; border: 1px solid #ffeeba;">
+                    <strong>Competências pendentes:</strong>
+                    {{ org.competencias_resumo.sem_competencias }} sem cadastro e
+                    {{ org.competencias_resumo.desatualizadas }} desatualizada(s).
+                </div>
+                {% endif %}
+                <div class="doc-buttons" style="display: flex; gap: 8px; flex-wrap: wrap; margin-bottom: 12px; margin-top: 5px;">
+                    {% if org.resolucao_estrutura and org.resolucao_estrutura.arquivo %}
+                    <a href="{{ org.resolucao_estrutura.arquivo.url }}" target="_blank" class="btn-doc" title="{{ org.resolucao_estrutura.nome }}">
+                        <i class="fa-solid fa-file-pdf"></i> Resolução Estrutura Organizacional
+                    </a>
+                    {% elif org.resolucao_estrutura and org.resolucao_estrutura.link %}
+                    <a href="{{ org.resolucao_estrutura.link }}" target="_blank" class="btn-doc" title="{{ org.resolucao_estrutura.nome }}">
+                        <i class="fa-solid fa-arrow-up-right-from-square"></i> Resolução Estrutura Organizacional
+                    </a>
+                    {% elif org.documento_aprovacao %}
+                    <a href="{{ org.documento_aprovacao.url }}" target="_blank" class="btn-doc" title="{{ org.nome_documento_aprovacao }}">
+                        <i class="fa-solid fa-file-pdf"></i> Resolução Estrutura Organizacional
+                    </a>
+                    {% endif %}
+                    
+                    {% if org.campus.sigla == 'IFMG' and org.regimento_geral_referencia and org.regimento_geral_referencia.arquivo %}
+                    <a href="{{ org.regimento_geral_referencia.arquivo.url }}" target="_blank" class="btn-doc" title="{{ org.regimento_geral_referencia.nome }}">
+                        <i class="fa-solid fa-file-pdf"></i> Resolução Regimento Geral
+                    </a>
+                    {% elif org.campus.sigla == 'IFMG' and org.regimento_geral_referencia and org.regimento_geral_referencia.link %}
+                    <a href="{{ org.regimento_geral_referencia.link }}" target="_blank" class="btn-doc" title="{{ org.regimento_geral_referencia.nome }}">
+                        <i class="fa-solid fa-arrow-up-right-from-square"></i> Resolução Regimento Geral
+                    </a>
+                    {% elif org.campus.sigla == 'IFMG' and org.regimento_geral_arquivo %}
+                    <a href="{{ org.regimento_geral_arquivo.url }}" target="_blank" class="btn-doc" title="{{ org.nome_regimento_geral }}">
+                        <i class="fa-solid fa-file-pdf"></i> Resolução Regimento Geral
+                    </a>
+                    {% endif %}
+                    
+                    {% if org.regimento_referencia and org.regimento_referencia.arquivo %}
+                    <a href="{{ org.regimento_referencia.arquivo.url }}" target="_blank" class="btn-doc" title="{{ org.regimento_referencia.nome }}">
+                        <i class="fa-solid fa-file-pdf"></i> Portaria Regimento Interno
+                    </a>
+                    {% elif org.regimento_referencia and org.regimento_referencia.link %}
+                    <a href="{{ org.regimento_referencia.link }}" target="_blank" class="btn-doc" title="{{ org.regimento_referencia.nome }}">
+                        <i class="fa-solid fa-arrow-up-right-from-square"></i> Portaria Regimento Interno
+                    </a>
+                    {% elif org.regimento_arquivo %}
+                    <a href="{{ org.regimento_arquivo.url }}" target="_blank" class="btn-doc" title="{{ org.nome_regimento }}">
+                        <i class="fa-solid fa-file-pdf"></i> Portaria Regimento Interno
+                    </a>
+                    {% endif %}
+                </div>
+                <div class="info-row">
+                    <i class="fa-solid fa-circle-check" style="color: {% if org.status == 'OFICIAL' %}{% if org.tem_proposta_ativa %}#f39c12{% else %}var(--if-green){% endif %}{% elif org.status == 'PROPOSTA' %}#f39c12{% else %}#bdc3c7{% endif %};"></i>
+                    <div class="info-body">
+                        <span class="info-label">Status:</span>
+                        <span class="info-value">{% if org.status == 'OFICIAL' and org.tem_proposta_ativa %}Oficial (Com Proposta de Alteração){% else %}{{ org.get_status_display }}{% endif %}</span>
+                    </div>
+                </div>
+                <div class="info-row">
+                    <i class="fa-solid fa-users"></i>
+                    <div class="info-body">
+                        <span class="info-label">Estrutura:</span>
+                        <span class="info-value">{{ org.unidades_reais_count }} Unidades</span>
+                    </div>
+                </div>
+                {% if org.unidades_reais_count > 0 %}
+                {% if request.user.is_authenticated %}
+                <div style="font-size: 0.8rem; padding-left: 30px; color: #95a5a6; margin-top: -5px; line-height: 1.4;">
+                    <div><strong>Por Cargo:</strong></div>
+                    <div class="quota-list">
+                        {% for quota in org.resumo_cotas_cargos %}
+                            <span class="quota-pill {{ quota.status }}" title="{% if quota.exceeded %}Limite excedido{% elif quota.unallocated %}Cargo não alocado{% else %}Dentro do limite{% endif %}">
+                                {% if quota.missing_quota %}{{ quota.sigla }}: {{ quota.used }} / -{% else %}{{ quota.sigla }}: {{ quota.used }} / {{ quota.limit }}{% endif %}
+                            </span>
+                        {% empty %}
+                            {{ org.resumo_por_cargo|safe }}
+                        {% endfor %}
+                    </div>
+                    {% for quota in org.resumo_cotas_cargos %}
+                        {% if quota.unallocated %}
+                            <div class="quota-alert">Cargo não alocado: {{ quota.sigla }} (saldo {{ quota.remaining }})</div>
+                        {% endif %}
+                    {% endfor %}
+                </div>
+                {% else %}
+                <div style="font-size: 0.8rem; padding-left: 30px; color: #95a5a6; margin-top: -5px; line-height: 1.4;">
+                    <div>🎖️ <strong>Por Cargo:</strong><br> {{ org.resumo_por_cargo|safe }}</div>
+                </div>
+                {% endif %}
+                {% endif %}
+            </div>
+
+            <div class="card-footer" style="display: flex; gap: 8px; flex-wrap: wrap;">
+                {% if org.status == 'OFICIAL' or request.user.is_staff or request.user.is_authenticated and request.user.profile.campus == org.campus %}
+                <a href="{% url 'organograma_detail' org.pk %}?next={{ request.get_full_path|urlencode }}" class="btn-outline" style="flex: 1; background-color: var(--if-green); color: white;">
+                    <i class="fa-solid fa-sitemap"></i> Ver Organograma
+                </a>
+                {% if request.user.is_staff %}
+                <a href="{% url 'organograma_edit' org.pk %}" class="btn-outline" style="flex: 1; border-color: #3498db; color: #3498db; background: transparent;" title="Editar Metadados">
+                    <i class="fa-solid fa-pen-to-square"></i> Editar Metadados
+                </a>
+                {% endif %}
+                {% else %}
+                <a href="#" class="btn-outline btn-disabled" onclick="alert('Este organograma não é oficial. Visualização restrita ao Responsável pelo Campus.'); return false;" style="flex: 1; border-color: #e74c3c; color: #e74c3c;">
+                    <i class="fa-solid fa-lock"></i> Visualização Restrita
+                </a>
+                {% endif %}
+            </div>
+        </div>
+        {% endfor %}
+    </div>
+    {% else %}
+    <div class="empty-state">
+        <i class="fa-regular fa-folder-open"></i>
+        <p>Ainda não há organogramas oficiais vigentes publicados.</p>
+    </div>
+    {% endif %}
+</div>
+{% endblock %}

@@ -1,0 +1,54 @@
+{% extends 'base.html' %}
+{% load static %}
+
+{% block title %}Entrar | IFMG OrgRepo{% endblock %}
+
+{% block content %}
+<style>
+    .login-container {
+        max-width: 400px;
+        margin: 60px auto;
+        animation: fadeIn 0.4s ease-out;
+    }
+    @keyframes fadeIn { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
+</style>
+
+<div class="login-container">
+    <div style="text-align: center; margin-bottom: 25px;">
+        <!-- Logo Clone if Sidebar is Hidden -->
+        <a href="{% url 'organograma_list' %}" style="text-decoration: none; display: inline-block;">
+            <img src="{% static 'core/images/logo_ifmg.png' %}" alt="Logo IFMG" style="width: 50px; height: 50px; border-radius: 10px; object-fit: contain; background: white; padding: 2px; margin: 0 auto 10px auto; box-shadow: 0 4px 10px rgba(46, 139, 87, 0.3); display: block;">
+        </a>
+        <h3 style="color: var(--if-green-dark); font-weight: 700; margin-bottom: 5px;">OrgRepo</h3>
+        <p style="color: #7f8c8d; font-size: 0.9rem;">Gestão de Organogramas Institucionais</p>
+    </div>
+
+    <div style="background: white; border-radius: 10px; padding: 30px; box-shadow: var(--card-shadow); border: 1px solid #e1e4e8;">
+        {% if form.errors %}
+            <div style="background-color: #fcf4f4; color: #c0392b; padding: 10px; border-radius: 6px; font-size: 0.85rem; margin-bottom: 15px; border-left: 4px solid #c0392b;">
+                <i class="fa-solid fa-circle-xmark"></i> Usuário ou senha incorretos.
+            </div>
+        {% endif %}
+
+        <form method="post">
+            {% csrf_token %}
+            
+            <div style="margin-bottom: 15px;">
+                <label for="id_username" style="display: block; font-weight: 600; font-size: 0.85rem; margin-bottom: 6px; color: #34495e;">Nome de Usuário</label>
+                <input type="text" name="username" id="id_username" required style="width: 100%; padding: 11px; border: 1px solid #dfe6e9; border-radius: 6px; font-size: 0.95rem; outline: none; transition: border 0.3s;" onfocus="this.style.borderColor='var(--if-green)';" onblur="this.style.borderColor='#dfe6e9';">
+            </div>
+
+            <div style="margin-bottom: 20px;">
+                <label for="id_password" style="display: block; font-weight: 600; font-size: 0.85rem; margin-bottom: 6px; color: #34495e;">Senha</label>
+                <input type="password" name="password" id="id_password" required style="width: 100%; padding: 11px; border: 1px solid #dfe6e9; border-radius: 6px; font-size: 0.95rem; outline: none; transition: border 0.3s;" onfocus="this.style.borderColor='var(--if-green)';" onblur="this.style.borderColor='#dfe6e9';">
+            </div>
+
+            <input type="hidden" name="next" value="{{ request.GET.next }}">
+
+            <button type="submit" class="btn-primary" style="width: 100%; padding: 12px; font-size: 0.95rem; background-color: var(--if-green); border: none; font-weight: 600; cursor: pointer; border-radius: 6px; color: white;">
+                <i class="fa-solid fa-right-to-bracket"></i> Entrar
+            </button>
+        </form>
+    </div>
+</div>
+{% endblock %}

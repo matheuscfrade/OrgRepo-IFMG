@@ -1,0 +1,77 @@
+{% extends 'base.html' %}
+
+{% block title %}Propor Alteração | IFMG OrgRepo{% endblock %}
+{% block page_title %}Abrir Solicitação de Alteração{% endblock %}
+
+{% block extra_css %}
+<style>
+    .form-container {
+        max-width: 600px;
+        margin: 0 auto;
+        background: white;
+        padding: 30px;
+        border-radius: 12px;
+        box-shadow: var(--card-shadow);
+        border-top: 4px solid #f39c12; /* Warning/Propose Yellow */
+    }
+    .form-actions {
+        display: flex;
+        justify-content: flex-end;
+        gap: 15px;
+        margin-top: 30px;
+        padding-top: 20px;
+        border-top: 1px solid #f1f2f6;
+    }
+    .btn-secondary {
+        padding: 10px 20px;
+        background: #f1f2f6;
+        color: var(--sidebar-text);
+        border-radius: 6px;
+        text-decoration: none;
+        font-weight: 600;
+        transition: background 0.2s;
+    }
+    .btn-warning {
+        padding: 10px 20px;
+        background: #f39c12;
+        color: white;
+        border: none;
+        border-radius: 6px;
+        font-weight: 600;
+        cursor: pointer;
+        transition: background 0.2s;
+    }
+    .btn-warning:hover { background: #d35400; }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="animate-fade">
+    <div class="form-container">
+        <h2 style="margin-bottom: 5px; color: #d35400;">Solicitar Alteração</h2>
+        <p style="color: #7f8c8d; font-size: 0.9rem; margin-bottom: 25px;">
+            Você está propondo mudanças no organograma de <strong>{{ organograma.campus.nome }}</strong>.
+        </p>
+
+        <div style="background: #fcf4e8; border-left: 4px solid #f39c12; padding: 15px; border-radius: 4px; margin-bottom: 25px; font-size: 0.9rem; color: #7f8c8d;">
+            <i class="fa-solid fa-circle-exclamation" style="color: #f39c12;"></i>
+            Ao clicar em Continuar, o sistema criará uma cópia idêntica da árvore para você poder <strong>manipular no visualizador</strong> sem estragar o oficial.
+        </div>
+        
+        <form method="post" onsubmit="this.querySelector('button').innerHTML = '<i class=\'fa-solid fa-spinner fa-spin\'></i> Enviando...'; this.querySelector('button').style.pointerEvents = 'none';">
+            {% csrf_token %}
+            <div style="margin-bottom: 20px;">
+                <label style="display:block; font-weight:600; margin-bottom:8px; color: var(--text-color);">Breve Justificativa:</label>
+                <textarea name="justificativa" rows="4" style="width:100%; padding:12px; border:1px solid #dfe4ea; border-radius:6px; font-family:inherit; resize:none;" placeholder="Ex: Criação da nova Coordenação de TI devido à resolução nº 2/2026..."></textarea>
+            </div>
+
+            <div class="form-actions">
+                <a href="{% url 'solicitacao_list' %}" class="btn-secondary">Cancelar</a>
+                <button type="submit" class="btn-warning" style="background-color: var(--if-green); border-color: var(--if-green);">
+                    <i class="fa-solid fa-paper-plane"></i> Criar Solicitação
+                </button>
+            </div>
+        </form>
+    </div>
+</div>
+{% endblock %}

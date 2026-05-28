@@ -1,0 +1,1525 @@
+{% extends 'base.html' %}
+
+{% block title %}Construtor de Estrutura | IFMG OrgRepo{% endblock %}
+{% block page_title %}Construtor Visual: {% if is_modelo_builder %}{{ modelo.nome }}{% else %}{{ organograma.campus.nome }}{% endif %}{% endblock %}
+
+{% block extra_css %}
+<style>
+    .builder-shell,
+    .builder-layout {
+        display: flex;
+        gap: 20px;
+        height: 75vh;
+        min-height: 620px;
+    }
+    .builder-sidebar,
+    .panel-left {
+        width: 35%;
+        min-width: 360px;
+        background: white;
+        border-radius: 12px;
+        box-shadow: var(--card-shadow);
+        display: flex;
+        flex-direction: column;
+        overflow: hidden;
+        border-top: 4px solid var(--if-green);
+        transition: width 0.3s, min-width 0.3s;
+    }
+    .builder-sidebar.collapsed,
+    .panel-left.collapsed {
+        width: 45px !important;
+        min-width: 45px;
+        padding: 0 !important;
+        cursor: pointer;
+    }
+    .panel-left.collapsed:hover {
+        background: #f1f2f6;
+    }
+    .builder-sidebar.collapsed .builder-sidebar-body,
+    .panel-left.collapsed .form-container,
+    .panel-left.collapsed .panel-header span,
+    .builder-sidebar.collapsed #selectedUnitHint {
+        display: none;
+    }
+    .panel-left.collapsed .panel-header {
+        justify-content: center !important;
+        padding: 20px 0 !important;
+        background: var(--if-green);
+    }
+    .panel-left.collapsed #panelLeftChevron {
+        color: white !important;
+    }
+    .builder-sidebar.collapsed #sidebarTitle {
+        writing-mode: vertical-rl;
+        transform: rotate(180deg);
+        margin: 0 auto;
+    }
+    .builder-sidebar.editing {
+        border-top-color: #f39c12;
+        outline: 3px solid rgba(243, 156, 18, 0.85);
+        outline-offset: -3px;
+    }
+    .builder-sidebar-header,
+    .panel-header {
+        padding: 15px 20px;
+        border-bottom: 1px solid #eee;
+        background: #fdfdfd;
+        font-weight: 600;
+        color: var(--text-color);
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 10px;
+        cursor: pointer;
+    }
+    .builder-sidebar-body,
+    .form-container {
+        padding: 20px;
+        overflow-y: auto;
+        flex: 1;
+        display: flex;
+        flex-direction: column;
+    }
+    .builder-main,
+    .panel-right {
+        width: 65%;
+        background: white;
+        border-radius: 12px;
+        box-shadow: var(--card-shadow);
+        position: relative;
+        overflow: hidden;
+        display: flex;
+        flex: 1;
+        min-width: 0;
+        flex-direction: column;
+    }
+    .builder-topline {
+        margin-bottom: 14px;
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 12px;
+        flex-wrap: wrap;
+    }
+    .builder-topline a {
+        color: #7f8c8d;
+        font-weight: 700;
+        text-decoration: none;
+    }
+    .builder-badge {
+        display: inline-flex;
+        align-items: center;
+        gap: 7px;
+        padding: 7px 10px;
+        border-radius: 6px;
+        background: #f1f8f4;
+        color: var(--if-green-dark);
+        font-size: 0.84rem;
+        font-weight: 700;
+    }
+    .builder-alert {
+        margin-bottom: 14px;
+        padding: 10px 14px;
+        border-radius: 8px;
+        border: 1px solid #ffeeba;
+        background: #fff3cd;
+        color: #856404;
+        display: flex;
+        gap: 10px;
+        align-items: flex-start;
+        font-size: 0.88rem;
+    }
+    .warning-banner {
+        background: #fff3cd;
+        border: 1px solid #ffeeba;
+        color: #856404;
+        padding: 10px 20px;
+        border-radius: 8px;
+        margin-bottom: 20px;
+        display: none;
+        align-items: center;
+        gap: 15px;
+        font-weight: 500;
+        box-shadow: 0 2px 4px rgba(0,0,0,0.05);
+    }
+    .warning-banner i {
+        font-size: 1.25rem;
+    }
+    .form-group,
+    .builder-field {
+        margin-bottom: 13px;
+    }
+    .builder-form-compact .builder-field {
+        margin-bottom: 9px;
+    }
+    .builder-form-compact .field-row {
+        margin-bottom: 9px;
+    }
+    .builder-field label,
+    .form-group label {
+        display: block;
+        margin-bottom: 4px;
+        color: var(--text-color);
+        font-size: 0.82rem;
+        font-weight: 700;
+    }
+    .form-control,
+    .builder-sidebar input[type="text"],
+    .builder-sidebar input[type="number"],
+    .builder-sidebar select,
+    .builder-sidebar textarea {
+        width: 100%;
+        min-height: 34px;
+        padding: 6px 8px;
+        border: 1px solid #dfe4ea;
+        border-radius: 6px;
+        font-size: 0.86rem;
+        font-family: inherit;
+        box-sizing: border-box;
+    }
+    .cargo-ref-locked {
+        background: #f1f2f6 !important;
+        color: #576574;
+        cursor: not-allowed;
+        pointer-events: none;
+    }
+    .builder-actions {
+        display: flex;
+        gap: 8px;
+        margin-top: 12px;
+    }
+    .field-row {
+        display: flex;
+        gap: 12px;
+        margin-bottom: 13px;
+    }
+    .field-row .builder-field {
+        margin-bottom: 0;
+    }
+    .field-main {
+        flex: 2;
+        min-width: 0;
+    }
+    .field-side {
+        flex: 1;
+        min-width: 130px;
+    }
+    .sigla-input-group {
+        display: flex;
+        align-items: center;
+        width: 100%;
+    }
+    .sigla-prefix {
+        background: #f1f2f6;
+        border: 1px solid #dfe4ea;
+        border-right: 0;
+        padding: 0 10px;
+        border-radius: 6px 0 0 6px;
+        font-weight: 700;
+        color: #576574;
+        min-height: 38px;
+        display: flex;
+        align-items: center;
+        box-sizing: border-box;
+    }
+    .sigla-input-group input {
+        border-top-left-radius: 0 !important;
+        border-bottom-left-radius: 0 !important;
+        flex: 1;
+    }
+    .btn-submit {
+        min-height: 40px;
+        padding: 9px 12px;
+        background: var(--if-green);
+        color: white;
+        border: none;
+        border-radius: 6px;
+        font-weight: 700;
+        cursor: pointer;
+        font-family: inherit;
+    }
+    .btn-submit.secondary {
+        background: #95a5a6;
+    }
+    .btn-submit.danger {
+        background: var(--if-red);
+    }
+    .btn-submit:disabled {
+        background: #bdc3c7;
+        cursor: not-allowed;
+    }
+    .chart-container-wrapper {
+        flex: 1;
+        min-height: 0;
+        background: #f8f9fa;
+        overflow: hidden;
+    }
+    .org-chart-export-area {
+        position: relative;
+        flex: 1;
+        min-height: 0;
+        display: flex;
+    }
+    .chart-control-group {
+        position: absolute;
+        bottom: 20px;
+        right: 20px;
+        z-index: 1000;
+        display: flex;
+        gap: 8px;
+    }
+    .control-btn-center {
+        background: white;
+        border: 1px solid #dfe4ea;
+        padding: 8px 12px;
+        border-radius: 6px;
+        box-shadow: 0 2px 5px rgba(0,0,0,0.1);
+        cursor: pointer;
+        font-size: 0.85rem;
+        font-weight: 700;
+        color: #555;
+    }
+    .node-button-g {
+        opacity: 0 !important;
+        pointer-events: none !important;
+    }
+    .node-box {
+        width: 400px;
+        min-height: 120px;
+        background: white;
+        border: 2px solid var(--if-green);
+        border-radius: 8px;
+        box-shadow: 0 2px 5px rgba(0,0,0,0.08);
+        display: flex;
+        flex-direction: column;
+        overflow: visible;
+        position: relative;
+        box-sizing: border-box;
+    }
+    .node-box.selected {
+        border-color: #f39c12;
+        outline: 3px solid rgba(243,156,18,0.85);
+        outline-offset: 2px;
+    }
+    .node-box.node-pending-definition {
+        border-style: dashed;
+        border-color: #f39c12;
+        background: #fffcf0;
+    }
+    .node-box-list-header {
+        min-height: 42px;
+        padding: 8px 142px 8px 44px;
+        color: white;
+        background: var(--if-green);
+        font-size: 0.84rem;
+        font-weight: 700;
+        line-height: 1.2;
+        display: flex;
+        align-items: center;
+        justify-content: flex-start;
+        text-align: center;
+        overflow-wrap: anywhere;
+    }
+    .node-pending-definition .node-box-list-header {
+        background: #f39c12;
+    }
+    .pending-badge {
+        position: absolute;
+        bottom: -10px;
+        left: 50%;
+        transform: translateX(-50%);
+        background: #f39c12;
+        color: white;
+        padding: 2px 10px;
+        border-radius: 10px;
+        font-size: 10px;
+        font-weight: 700;
+        text-transform: uppercase;
+        box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        z-index: 20;
+        white-space: nowrap;
+    }
+    .node-box-list-body {
+        padding: 12px 15px;
+        text-align: center;
+        display: flex;
+        flex: 1;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+    }
+    .node-box-list-body h4 {
+        margin: 0 0 4px;
+        color: var(--if-green);
+        font-size: 15px;
+    }
+    .node-box-actions {
+        position: absolute;
+        top: 6px;
+        right: 6px;
+        background: rgba(255, 255, 255, 0.95);
+        padding: 4px 6px;
+        border-radius: 4px;
+        box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+        display: flex;
+        gap: 8px;
+        z-index: 20;
+        opacity: 0;
+        visibility: hidden;
+        transition: opacity 0.2s, visibility 0.2s;
+    }
+    .node-box:hover .node-box-actions {
+        opacity: 1;
+        visibility: visible;
+    }
+    .node-box-actions button {
+        width: 26px;
+        height: 26px;
+        border: 0;
+        border-radius: 4px;
+        background: transparent;
+        color: #7f8c8d;
+        cursor: pointer;
+        transition: background 0.2s, color 0.2s;
+    }
+    .node-box-actions button:hover {
+        background: #f1f1f1;
+        color: var(--if-green);
+    }
+    .org-export-competencias-status {
+        margin-top: 5px;
+        font-size: 0.72rem;
+        color: #576574;
+    }
+    .competencias-empty-warning {
+        color: #b7791f;
+    }
+    .competencias-panel {
+        margin: 10px 0 0;
+        border: 1px solid #e1e4e8;
+        border-radius: 8px;
+        padding: 10px;
+        background: #f8fafc;
+    }
+    .competencias-list {
+        display: grid;
+        gap: 8px;
+        margin: 10px 0;
+    }
+    .competencia-item {
+        padding: 8px;
+        background: #f8fafc;
+        border: 1px solid #e1e4e8;
+        border-radius: 6px;
+        font-size: 0.82rem;
+        line-height: 1.3;
+    }
+    .competencia-actions {
+        display: flex;
+        gap: 6px;
+        justify-content: flex-end;
+        margin-top: 6px;
+    }
+    .competencia-actions button {
+        border: 0;
+        background: transparent;
+        cursor: pointer;
+        color: #7f8c8d;
+    }
+    .competencia-actions button:hover {
+        color: var(--if-green);
+    }
+    .competencia-form-wrap {
+        display: none;
+        border-top: 1px solid #e1e4e8;
+        padding-top: 10px;
+        margin-top: 10px;
+    }
+    .competencia-ref-grid {
+        display: grid;
+        grid-template-columns: repeat(4, minmax(0, 1fr));
+        gap: 6px;
+        margin-bottom: 8px;
+    }
+    .agrupamento-bar {
+        display: none;
+        position: absolute;
+        bottom: 20px;
+        left: 50%;
+        transform: translateX(-50%);
+        background: white;
+        padding: 12px 20px;
+        border-radius: 8px;
+        box-shadow: 0 4px 15px rgba(0,0,0,0.15);
+        align-items: center;
+        gap: 15px;
+        z-index: 1000;
+        border-top: 3px solid var(--if-green);
+    }
+    .node-select-chk {
+        position: absolute;
+        left: 8px;
+        top: 8px;
+        z-index: 25;
+    }
+    @media (max-width: 980px) {
+        .builder-shell,
+        .builder-layout {
+            height: auto;
+            min-height: 0;
+            flex-direction: column;
+        }
+        .builder-sidebar,
+        .panel-left,
+        .builder-main,
+        .panel-right {
+            width: 100%;
+            min-width: 0;
+        }
+        .builder-main {
+            min-height: 620px;
+        }
+        .field-row {
+            flex-direction: column;
+        }
+        .competencia-ref-grid {
+            grid-template-columns: repeat(2, minmax(0, 1fr));
+        }
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="animate-fade">
+    <div class="builder-topline">
+        <a href="{% if next_url %}{{ next_url }}{% elif is_modelo_builder %}{% url 'modelo_referencial_list' %}{% else %}{% url 'organograma_detail' organograma.pk %}{% endif %}" {% if not is_modelo_builder %}onclick="return window.checkPendingNavigation(event);"{% endif %}>
+            <i class="fa-solid fa-arrow-left"></i> Concluir Edição
+        </a>
+        <span class="builder-badge">
+            <i class="fa-solid fa-circle-info"></i>
+            {% if is_modelo_builder %}Modelo Referencial{% else %}
+            {% if related_solicitacao or organograma.status == 'PROPOSTA' %}Solicitação de alteração{% else %}Alterações em modo Rascunho{% endif %}
+            {% endif %}
+        </span>
+    </div>
+
+    {% if not allow_structure_changes %}
+    <div class="builder-alert">
+        <i class="fa-solid fa-lock"></i>
+        <div>Solicitações de alteração em análise não permitem incluir, remover ou agrupar caixinhas. Selecione uma Caixinha para ajustar dados permitidos.</div>
+    </div>
+    {% endif %}
+
+    {% if organograma.has_pending_units %}
+    <div class="builder-alert warning-banner" id="pendingValidationBanner" style="display:flex;">
+        <i class="fa-solid fa-triangle-exclamation"></i>
+        <div>Este organograma possui unidades com definição pendente. Revise tipo de unidade e cargo antes de publicar.</div>
+    </div>
+    {% endif %}
+
+    {% if competencias_resumo.tem_alertas %}
+    <div class="builder-alert">
+        <i class="fa-solid fa-scale-balanced"></i>
+        <div>
+            <strong>Competências pendentes:</strong>
+            {{ competencias_resumo.sem_competencias }} unidade(s) sem competências e
+            {{ competencias_resumo.desatualizadas }} unidade(s) com competências desatualizadas.
+        </div>
+    </div>
+    {% endif %}
+
+    <div class="builder-shell builder-layout">
+        <aside class="builder-sidebar panel-left" id="panelLeft" onclick="if(this.classList.contains('collapsed')) window.togglePanelLeft()">
+            <div class="builder-sidebar-header panel-header" onclick="event.stopPropagation(); window.togglePanelLeft()">
+                <span id="sidebarTitle">Adicionar Nova Caixinha</span>
+                <span id="selectedUnitHint" style="font-size:0.78rem; color:#7f8c8d;">Selecione uma Caixinha</span>
+                <i class="fa-solid fa-chevron-left" id="panelLeftChevron" style="font-size:1.1rem; transition:transform 0.3s;"></i>
+            </div>
+            <div class="builder-sidebar-body form-container">
+                <form id="sidebarUnitForm" class="builder-form-compact" method="post">
+                    {% csrf_token %}
+                    <div class="builder-field">
+                        {{ form.unidade_pai.label_tag }}
+                        {{ form.unidade_pai }}
+                    </div>
+                    <div class="builder-field">
+                        {{ form.tipo_unidade.label_tag }}
+                        {{ form.tipo_unidade }}
+                    </div>
+                    <div class="builder-field" id="div_cargo_ref">
+                        {{ form.cargo_funcao_ref.label_tag }}
+                        {{ form.cargo_funcao_ref }}
+                    </div>
+                    <div class="field-row" id="div_cargo_custom" style="display:none;">
+                        <div class="builder-field field-main">
+                            {{ form.cargo_funcao.label_tag }}
+                            {{ form.cargo_funcao }}
+                        </div>
+                        <div class="builder-field field-side">
+                            {{ form.sigla_cargo.label_tag }}
+                            {{ form.sigla_cargo }}
+                        </div>
+                    </div>
+                    <div class="field-row">
+                        <div class="builder-field field-main">
+                            {{ form.nome_unidade.label_tag }}
+                            {{ form.nome_unidade }}
+                        </div>
+                        <div class="builder-field field-side">
+                            {{ form.sigla_unidade.label_tag }}
+                            <div class="sigla-input-group">
+                                <span class="sigla-prefix" id="siglaPrefixDisplay">{{ sigla_prefix }}{% if sigla_prefix %}-{% endif %}</span>
+                                {{ form.sigla_unidade }}
+                            </div>
+                            <div style="margin-top:4px; display:flex; align-items:center; gap:4px;">
+                                <input type="checkbox" id="chk_sem_sigla" onclick="window.toggleSigla(this.checked)">
+                                <label for="chk_sem_sigla" style="font-size:0.75rem; color:#7f8c8d; cursor:pointer; font-weight:500;">Sem Sigla</label>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="builder-field">
+                        <label style="display:flex; align-items:center; gap:8px;">
+                            {{ form.ligacao_indireta }} Ligação Indireta
+                        </label>
+                    </div>
+                    <div class="builder-field">
+                        {{ form.layout_filhos.label_tag }}
+                        {{ form.layout_filhos }}
+                    </div>
+                    {% if form.atribuicoes and not is_modelo_builder %}
+                    <div class="builder-field">
+                        {{ form.atribuicoes.label_tag }}
+                        {{ form.atribuicoes }}
+                    </div>
+                    {% endif %}
+                    <div id="formErrors" style="display:none; margin:10px 0; color:#c0392b; font-size:0.85rem;"></div>
+                    <div class="builder-actions">
+                        <button type="submit" id="sidebarSubmitBtn" class="btn-submit" style="flex:1;" {% if not allow_structure_changes %}disabled{% endif %}>
+                            <i class="fa-solid fa-plus"></i> <span id="sidebarSubmitText">Inserir no Gráfico</span>
+                        </button>
+                        <button type="button" id="sidebarCancelBtn" class="btn-submit secondary" style="display:none;" onclick="window.resetSidebarForm()">Cancelar</button>
+                    </div>
+                </form>
+
+                {% if not is_modelo_builder %}
+                <div class="competencias-panel" id="competenciasPanel">
+                    <div style="display:flex; justify-content:space-between; align-items:center; gap:10px;">
+                        <div>
+                            <strong>Competências da Unidade</strong>
+                            <div id="competenciasStatusText" style="font-size:0.78rem; color:#7f8c8d;">Selecione uma caixinha para gerenciar competências.</div>
+                        </div>
+                    </div>
+                    <input type="hidden" id="competenciaRegimentoId" value="{% if regimento_competencias %}{{ regimento_competencias.id }}{% endif %}">
+                    <input type="file" id="competenciasImportFile" accept=".csv,.txt" style="display:none;" onchange="window.importCompetencias()">
+                    <div class="competencias-list" id="competenciasList"></div>
+                    <div id="competenciaFormWrap" class="competencia-form-wrap">
+                        <input type="hidden" id="competenciaEditId" value="">
+                        <div class="competencia-ref-grid">
+                            <input id="competenciaArtigo" class="form-control" placeholder="Art.">
+                            <input id="competenciaParagrafo" class="form-control" placeholder="§">
+                            <input id="competenciaInciso" class="form-control" placeholder="Inciso">
+                            <input id="competenciaAlinea" class="form-control" placeholder="Alínea">
+                        </div>
+                        <textarea id="competenciaTexto" class="form-control" rows="3" placeholder="Competência prevista no regimento..."></textarea>
+                        <div style="display:flex; gap:8px; margin-top:8px;">
+                            <button type="button" onclick="window.saveCompetencia()" class="btn-submit" style="flex:1;">
+                                <i class="fa-solid fa-floppy-disk"></i> Salvar Competência
+                            </button>
+                            <button type="button" onclick="window.cancelCompetenciaEdit()" class="btn-submit secondary">Cancelar</button>
+                        </div>
+                    </div>
+                    <button id="novaCompetenciaBtn" type="button" onclick="window.startCompetenciaCreate()" style="width:100%; border:1px dashed #95a5a6; background:white; color:#34495e; border-radius:6px; padding:8px; font-weight:700; cursor:pointer;" disabled>
+                        <i class="fa-solid fa-plus"></i> Nova Competência
+                    </button>
+                    <button type="button" class="btn-submit secondary" id="competenciasImportBtn" onclick="document.getElementById('competenciasImportFile').click()" disabled>
+                        <i class="fa-solid fa-file-import"></i> Importar Competências
+                    </button>
+                </div>
+                {% endif %}
+            </div>
+        </aside>
+
+        <section class="builder-main panel-right">
+            <div class="org-chart-export-area">
+                <div class="chart-container-wrapper" id="orgChartContainer"></div>
+                {% include 'core/includes/organograma_export_controls.html' %}
+                <div class="chart-control-group">
+                    <button type="button" class="control-btn-center" onclick="window.recenterChart()">
+                        <i class="fa-solid fa-compress"></i> Centralizar
+                    </button>
+                </div>
+                <div id="agrupamentoBar" class="agrupamento-bar">
+                    <span id="agrupamentoCount" style="font-weight:600; color:#2c3e50; font-size:0.9rem;">0 caixas selecionadas</span>
+                    <button type="button" onclick="window.triggerAgrupar()" style="background:var(--if-green); color:white; border:0; padding:6px 12px; border-radius:4px; font-weight:700; cursor:pointer;">
+                        <i class="fa-solid fa-folder-plus"></i> Agrupar
+                    </button>
+                    <button type="button" onclick="window.clearSelection()" style="background:#e74c3c; color:white; border:0; padding:6px 12px; border-radius:4px; font-weight:700; cursor:pointer;">
+                        <i class="fa-solid fa-times"></i> Cancelar
+                    </button>
+                </div>
+            </div>
+        </section>
+    </div>
+</div>
+
+<script src="https://d3js.org/d3.v7.min.js"></script>
+<script>
+    const isModeloBuilder = {{ is_modelo_builder|yesno:"true,false" }};
+    const allowStructureChanges = {{ allow_structure_changes|yesno:"true,false" }};
+    const siglaPrefix = "{{ sigla_prefix|escapejs }}";
+    const rawUnidades = '{{ unidades_json|escapejs }}';
+    {% if is_modelo_builder %}
+    const competenciasBaseUrlTemplate = "";
+    const competenciasImportUrlTemplate = "";
+    const competenciaUpdateUrlTemplate = "";
+    const competenciasReorderUrlTemplate = "";
+    const unitDeleteUrlTemplate = "{% url 'modelo_referencial_unit_delete' modelo.pk 999999 %}";
+    const unitUpUrlTemplate = "{% url 'modelo_referencial_unit_up' modelo.pk 999999 %}";
+    const unitDownUrlTemplate = "{% url 'modelo_referencial_unit_down' modelo.pk 999999 %}";
+    const agruparUrl = "{% url 'modelo_referencial_agrupar' modelo.pk %}";
+    const desagruparUrlTemplate = "{% url 'modelo_referencial_desagrupar' modelo.pk 999999 %}";
+    const validateUrl = "";
+    {% else %}
+    const competenciasBaseUrlTemplate = "{% url 'unidade_competencias' organograma.pk 999999 %}";
+    const competenciasImportUrlTemplate = "{% url 'unidade_competencias_importar' organograma.pk 999999 %}";
+    const competenciaUpdateUrlTemplate = "{% url 'unidade_competencia_update' organograma.pk 999999 888888 %}";
+    const competenciasReorderUrlTemplate = "{% url 'unidade_competencias_reordenar' organograma.pk 999999 %}";
+    const unitDeleteUrlTemplate = "{% url 'organograma_unit_delete' organograma.pk 999999 %}";
+    const unitUpUrlTemplate = "{% url 'organograma_unit_up' organograma.pk 999999 %}";
+    const unitDownUrlTemplate = "{% url 'organograma_unit_down' organograma.pk 999999 %}";
+    const agruparUrl = "{% url 'organograma_agrupar_unidades' organograma.pk %}";
+    const desagruparUrlTemplate = "{% url 'organograma_desagrupar_unidade' organograma.pk 999999 %}";
+    const validateUrl = "{% url 'organograma_validate_ajax' organograma.pk %}";
+    {% endif %}
+    let data = [];
+    let selectedUnitId = null;
+    let editingUnitId = null;
+    let selectedNodes = [];
+
+    try {
+        data = JSON.parse(rawUnidades || '[]');
+    } catch (error) {
+        console.error('Erro ao carregar dados do organograma:', error);
+    }
+
+    function byId(id) {
+        return data.find(item => String(item.id) === String(id));
+    }
+
+    function escapeHtml(value) {
+        return String(value || '').replace(/[&<>"']/g, char => ({
+            '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;'
+        }[char]));
+    }
+
+    function stripSiglaPrefix(value) {
+        const sigla = String(value || '');
+        if (!siglaPrefix) return sigla;
+        const prefixWithSeparator = `${siglaPrefix}-`;
+        return sigla.startsWith(prefixWithSeparator) ? sigla.slice(prefixWithSeparator.length) : sigla;
+    }
+
+    function formatValidationErrors(errors) {
+        if (!errors) return '';
+        return Object.entries(errors).map(([field, messages]) => {
+            const label = field === '__all__' ? 'Geral' : field;
+            const items = Array.isArray(messages) ? messages : [messages];
+            return `<p style="margin:0 0 8px;"><strong>${escapeHtml(label)}:</strong> ${items.map(escapeHtml).join('<br>')}</p>`;
+        }).join('');
+    }
+
+    function showValidationPopup(payload, title = 'Verifique os dados da caixinha') {
+        const html = payload.html || formatValidationErrors(payload.errors) || escapeHtml(JSON.stringify(payload));
+        if (window.Swal) {
+            Swal.fire({
+                title,
+                html,
+                icon: 'error',
+                confirmButtonColor: '#2E8B57',
+                confirmButtonText: 'Entendi'
+            });
+        } else {
+            alert((payload.html || JSON.stringify(payload.errors || payload)).replace(/<[^>]+>/g, '\n'));
+        }
+    }
+
+    function setFieldValue(id, value) {
+        const field = document.getElementById(id);
+        if (!field) return;
+        if (field.type === 'checkbox') {
+            field.checked = !!value;
+        } else {
+            field.value = value || '';
+        }
+    }
+
+    function getCsrfToken() {
+        const input = document.querySelector('[name=csrfmiddlewaretoken]');
+        return input ? input.value : '';
+    }
+
+    function replaceCompetenciaUrl(urlTemplate, unitId, competenciaId) {
+        return urlTemplate
+            .replace('999999', unitId)
+            .replace('888888', competenciaId || '888888');
+    }
+
+    function updateNodeCompetencias(nodeId, payload) {
+        const node = byId(nodeId);
+        if (!node) return;
+        node.competencias = payload.competencias || [];
+        node.competenciasStatus = payload.competenciasStatus;
+        node.competenciasStatusLabel = payload.competenciasStatusLabel;
+        renderCompetencias(node);
+        if (window.renderChart) window.renderChart();
+    }
+
+    function setCargoRefLocked(cargoRef, locked) {
+        if (!cargoRef) return;
+        cargoRef.classList.toggle('cargo-ref-locked', locked);
+        cargoRef.dataset.lockedByTipo = locked ? 'true' : 'false';
+        cargoRef.setAttribute('aria-disabled', locked ? 'true' : 'false');
+        if (locked) {
+            cargoRef.setAttribute('tabindex', '-1');
+        } else {
+            cargoRef.removeAttribute('tabindex');
+        }
+    }
+
+    function updateCargoFieldsFromTipo() {
+        const tipo = document.getElementById('id_tipo_unidade');
+        const cargoRef = document.getElementById('id_cargo_funcao_ref');
+        const cargoLivre = document.getElementById('div_cargo_custom');
+        const cargoNome = document.getElementById('id_cargo_funcao');
+        const siglaCargo = document.getElementById('id_sigla_cargo');
+        if (!tipo || !tipo.selectedOptions.length) return;
+
+        const option = tipo.selectedOptions[0];
+        const defaultCargoId = option.dataset.cargoId || '';
+        const defaultCargoName = option.dataset.cargo || '';
+        const defaultSigla = option.dataset.sigla || '';
+        const allowsFreeCargo = option.dataset.cargoLivre === 'true';
+
+        if (cargoLivre) cargoLivre.style.display = allowsFreeCargo ? 'flex' : 'none';
+        if (cargoRef) cargoRef.value = defaultCargoId || '';
+        setCargoRefLocked(cargoRef, true);
+        if (cargoNome && defaultCargoName && (!allowsFreeCargo || !cargoNome.value)) cargoNome.value = defaultCargoName;
+        if (siglaCargo && defaultSigla && (!allowsFreeCargo || !siglaCargo.value)) siglaCargo.value = defaultSigla;
+    }
+
+    function bindFormRules() {
+        const tipo = document.getElementById('id_tipo_unidade');
+        const cargoRef = document.getElementById('id_cargo_funcao_ref');
+        const siglaCargo = document.getElementById('id_sigla_cargo');
+        if (tipo) tipo.addEventListener('change', updateCargoFieldsFromTipo);
+        if (cargoRef && siglaCargo) {
+            cargoRef.addEventListener('change', () => {
+                const option = cargoRef.selectedOptions && cargoRef.selectedOptions[0];
+                if (!option) return;
+                const label = option.textContent || '';
+                const match = label.match(/\(([^)]+)\)\s*$/);
+                if (match && !siglaCargo.value) siglaCargo.value = match[1];
+            });
+        }
+        updateCargoFieldsFromTipo();
+    }
+
+    function applyFlexibleOptionRules(node) {
+        const tipo = document.getElementById('id_tipo_unidade');
+        const cargo = document.getElementById('id_cargo_funcao_ref');
+        if (!tipo || !cargo) return;
+
+        const allowedTipoIds = node && node.isFlexibleSource ? (node.allowedTipoIds || []).map(String) : [];
+        const allowedCargoIds = node && node.isFlexibleSource ? (node.allowedCargoIds || []).map(String) : [];
+
+        Array.from(tipo.options).forEach(option => {
+            if (!option.value) return;
+            option.hidden = allowedTipoIds.length > 0 && !allowedTipoIds.includes(String(option.value));
+        });
+        Array.from(cargo.options).forEach(option => {
+            if (!option.value) return;
+            option.hidden = allowedCargoIds.length > 0 && !allowedCargoIds.includes(String(option.value));
+        });
+    }
+
+    window.toggleSigla = function(checked) {
+        const siglaInput = document.getElementById('id_sigla_unidade');
+        if (!siglaInput) return;
+        if (checked) {
+            siglaInput.value = '';
+            siglaInput.readOnly = true;
+            siglaInput.style.background = '#f5f6fa';
+        } else {
+            siglaInput.readOnly = false;
+            siglaInput.style.background = 'white';
+        }
+    };
+
+    window.togglePanelLeft = function() {
+        const panel = document.getElementById('panelLeft');
+        const chevron = document.getElementById('panelLeftChevron');
+        if (!panel) return;
+        const isCollapsed = panel.classList.toggle('collapsed');
+        if (chevron) chevron.style.transform = isCollapsed ? 'rotate(180deg)' : 'rotate(0deg)';
+        setTimeout(() => {
+            if (window.renderChart) window.renderChart();
+            setTimeout(() => {
+                if (window.recenterChart) window.recenterChart();
+            }, 100);
+        }, 300);
+    };
+
+    window.centerOnNode = function(id) {
+        if (!window.currentRoot || !window.currentZoom || !window.currentSvg || !window.currentCanvas) return;
+        const node = window.currentRoot.descendants().find(item => String(item.id) === String(id));
+        const element = document.getElementById('orgChartContainer');
+        if (!node || !element) return;
+        const width = element.clientWidth || 800;
+        const height = element.clientHeight || 600;
+        window.currentSvg.transition().duration(450).call(
+            window.currentZoom.transform,
+            d3.zoomIdentity
+                .translate(width / 2 - node.x, height / 2 - node.y)
+                .scale(1)
+        );
+    };
+
+    window.toggleExpand = function(id) {
+        const node = byId(id);
+        if (!node) return;
+        node.collapsed = !node.collapsed;
+        if (window.renderChart) {
+            window.renderChart();
+            window.centerOnNode(id);
+        }
+    };
+
+    window.resetSidebarForm = function() {
+        editingUnitId = null;
+        document.getElementById('sidebarUnitForm').reset();
+        document.getElementById('sidebarTitle').innerText = 'Adicionar Nova Caixinha';
+        document.getElementById('sidebarSubmitText').innerText = 'Inserir no Gráfico';
+        document.getElementById('sidebarSubmitBtn').disabled = !allowStructureChanges;
+        document.getElementById('sidebarCancelBtn').style.display = 'none';
+        document.getElementById('formErrors').style.display = 'none';
+        document.getElementById('panelLeft').classList.remove('editing');
+        selectedUnitId = null;
+        applyFlexibleOptionRules(null);
+        updateCargoFieldsFromTipo();
+        renderCompetencias(null);
+        if (window.renderChart) window.renderChart();
+    };
+
+    window.selectNode = function(id) {
+        selectedUnitId = String(id);
+        const node = byId(id);
+        if (!node) return;
+
+        editingUnitId = String(id);
+        document.getElementById('panelLeft').classList.add('editing');
+        document.getElementById('sidebarTitle').innerText = 'Editar Caixinha';
+        document.getElementById('selectedUnitHint').innerText = node.sigla || node.name || 'Caixinha selecionada';
+        document.getElementById('sidebarSubmitText').innerText = 'Salvar Alterações';
+        document.getElementById('sidebarSubmitBtn').disabled = false;
+        document.getElementById('sidebarCancelBtn').style.display = 'inline-block';
+
+        setFieldValue('id_unidade_pai', node.parentId);
+        setFieldValue('id_tipo_unidade', node.tipoUnidadeId);
+        setFieldValue('id_cargo_funcao_ref', node.cargoFuncaoId);
+        setFieldValue('id_cargo_funcao', node.cargo_funcao);
+        setFieldValue('id_sigla_cargo', node.sigla_cargo);
+        setFieldValue('id_nome_unidade', node.name);
+        setFieldValue('id_sigla_unidade', stripSiglaPrefix(node.sigla));
+        setFieldValue('id_ligacao_indireta', node.ligacaoIndireta);
+        setFieldValue('id_layout_filhos', node.layout_filhos || 'V');
+        applyFlexibleOptionRules(node);
+        updateCargoFieldsFromTipo();
+
+        renderCompetencias(node);
+        if (window.renderChart) window.renderChart();
+    };
+
+    function renderCompetencias(node) {
+        if (isModeloBuilder) return;
+        const status = document.getElementById('competenciasStatusText');
+        const list = document.getElementById('competenciasList');
+        const importBtn = document.getElementById('competenciasImportBtn');
+        const novaBtn = document.getElementById('novaCompetenciaBtn');
+        const formWrap = document.getElementById('competenciaFormWrap');
+        if (!status || !list) return;
+        if (!node || node.is_agrupamento) {
+            status.innerText = 'Selecione uma caixinha para gerenciar competências.';
+            list.innerHTML = '<div class="competencia-item">Selecione uma unidade real.</div>';
+            if (importBtn) importBtn.disabled = true;
+            if (novaBtn) novaBtn.disabled = true;
+            if (formWrap) formWrap.style.display = 'none';
+            return;
+        }
+        status.innerText = node.competenciasStatusLabel || 'Competências vinculadas à unidade selecionada.';
+        importBtn.disabled = !selectedUnitId;
+        if (novaBtn) novaBtn.disabled = !selectedUnitId;
+
+        const competencias = node.competencias || [];
+        if (!competencias.length) {
+            list.innerHTML = '<div class="competencia-item">Nenhuma competência cadastrada.</div>';
+            return;
+        }
+        list.innerHTML = competencias.map(item => `
+            <div class="competencia-item" data-competencia-id="${item.id}">
+                <strong>${escapeHtml([item.artigo, item.paragrafo, item.inciso, item.alinea].filter(Boolean).join(' '))}</strong>
+                <div>${escapeHtml(item.texto)}</div>
+                <div class="competencia-actions">
+                    <button type="button" title="Subir" onclick="window.moveCompetencia('${item.id}', -1)"><i class="fa-solid fa-arrow-up"></i></button>
+                    <button type="button" title="Descer" onclick="window.moveCompetencia('${item.id}', 1)"><i class="fa-solid fa-arrow-down"></i></button>
+                    <button type="button" title="Editar" onclick="window.startCompetenciaEdit('${item.id}')"><i class="fa-solid fa-pen"></i></button>
+                    <button type="button" title="Excluir" onclick="window.deleteCompetencia('${item.id}')"><i class="fa-solid fa-trash"></i></button>
+                </div>
+            </div>
+        `).join('');
+    }
+
+    window.cancelCompetenciaEdit = function() {
+        const wrap = document.getElementById('competenciaFormWrap');
+        if (wrap) wrap.style.display = 'none';
+        ['competenciaEditId', 'competenciaArtigo', 'competenciaParagrafo', 'competenciaInciso', 'competenciaAlinea', 'competenciaTexto'].forEach(id => {
+            const el = document.getElementById(id);
+            if (el) el.value = '';
+        });
+    };
+
+    window.startCompetenciaCreate = function() {
+        if (!selectedUnitId) return;
+        window.cancelCompetenciaEdit();
+        document.getElementById('competenciaFormWrap').style.display = 'block';
+        document.getElementById('competenciaTexto').focus();
+    };
+
+    window.startCompetenciaEdit = function(id) {
+        const node = byId(selectedUnitId);
+        const competencia = node && (node.competencias || []).find(item => String(item.id) === String(id));
+        if (!competencia) return;
+        document.getElementById('competenciaEditId').value = competencia.id;
+        document.getElementById('competenciaArtigo').value = competencia.artigo || '';
+        document.getElementById('competenciaParagrafo').value = competencia.paragrafo || '';
+        document.getElementById('competenciaInciso').value = competencia.inciso || '';
+        document.getElementById('competenciaAlinea').value = competencia.alinea || '';
+        document.getElementById('competenciaTexto').value = competencia.texto || '';
+        document.getElementById('competenciaFormWrap').style.display = 'block';
+        document.getElementById('competenciaTexto').focus();
+    };
+
+    window.saveCompetencia = async function() {
+        if (!selectedUnitId) return;
+        const editId = document.getElementById('competenciaEditId').value;
+        const formData = new URLSearchParams();
+        formData.append('csrfmiddlewaretoken', getCsrfToken());
+        formData.append('artigo', document.getElementById('competenciaArtigo').value);
+        formData.append('paragrafo', document.getElementById('competenciaParagrafo').value);
+        formData.append('inciso', document.getElementById('competenciaInciso').value);
+        formData.append('alinea', document.getElementById('competenciaAlinea').value);
+        formData.append('texto', document.getElementById('competenciaTexto').value);
+        formData.append('regimento_id', document.getElementById('competenciaRegimentoId').value || '');
+
+        const url = editId
+            ? replaceCompetenciaUrl(competenciaUpdateUrlTemplate, selectedUnitId, editId)
+            : replaceCompetenciaUrl(competenciasBaseUrlTemplate, selectedUnitId);
+        const response = await fetch(url, {
+            method: 'POST',
+            headers: { 'X-Requested-With': 'XMLHttpRequest', 'Content-Type': 'application/x-www-form-urlencoded' },
+            body: formData
+        });
+        const payload = await response.json();
+        if (!response.ok) {
+            alert(JSON.stringify(payload.errors || payload));
+            return;
+        }
+        window.cancelCompetenciaEdit();
+        updateNodeCompetencias(selectedUnitId, payload);
+    };
+
+    window.deleteCompetencia = async function(id) {
+        if (!selectedUnitId || !confirm('Excluir esta competência?')) return;
+        const response = await fetch(replaceCompetenciaUrl(competenciaUpdateUrlTemplate, selectedUnitId, id), {
+            method: 'DELETE',
+            headers: { 'X-Requested-With': 'XMLHttpRequest', 'X-CSRFToken': getCsrfToken() }
+        });
+        const payload = await response.json();
+        if (!response.ok) {
+            alert(JSON.stringify(payload.errors || payload));
+            return;
+        }
+        updateNodeCompetencias(selectedUnitId, payload);
+    };
+
+    window.moveCompetencia = async function(id, direction) {
+        const node = byId(selectedUnitId);
+        if (!node) return;
+        const competencias = [...(node.competencias || [])];
+        const index = competencias.findIndex(item => String(item.id) === String(id));
+        const target = index + direction;
+        if (index < 0 || target < 0 || target >= competencias.length) return;
+        [competencias[index], competencias[target]] = [competencias[target], competencias[index]];
+        const formData = new URLSearchParams();
+        formData.append('csrfmiddlewaretoken', getCsrfToken());
+        competencias.forEach(item => formData.append('competencias[]', item.id));
+        const response = await fetch(replaceCompetenciaUrl(competenciasReorderUrlTemplate, selectedUnitId), {
+            method: 'POST',
+            headers: { 'X-Requested-With': 'XMLHttpRequest', 'Content-Type': 'application/x-www-form-urlencoded' },
+            body: formData
+        });
+        const payload = await response.json();
+        if (response.ok) {
+            node.competencias = payload.competencias || competencias;
+            renderCompetencias(node);
+        }
+    };
+
+    window.checkPendingNavigation = function(event) {
+        if (!event) return true;
+        event.preventDefault();
+        const targetHref = event.currentTarget.href;
+        const hasPending = data.some(node => node.isPendingDefinition);
+
+        if (!validateUrl) {
+            window.location.href = targetHref;
+            return false;
+        }
+
+        fetch(validateUrl, {
+            headers: { 'X-Requested-With': 'XMLHttpRequest' }
+        })
+            .then(response => response.json())
+            .then(result => {
+                if (result.status === 'success' && !hasPending) {
+                    window.location.href = targetHref;
+                    return;
+                }
+
+                const governanceHtml = result.status === 'error'
+                    ? result.html
+                    : '<p>Este organograma ainda possui unidades com definição pendente. Deseja sair do construtor mesmo assim?</p>';
+                const title = result.status === 'error' ? 'Pendências de Adequação' : 'Pendências de Definição';
+
+                if (window.Swal) {
+                    Swal.fire({
+                        title,
+                        html: governanceHtml,
+                        icon: result.status === 'error' ? 'error' : 'warning',
+                        width: '800px',
+                        showCancelButton: true,
+                        confirmButtonColor: result.status === 'error' ? '#d33' : '#f39c12',
+                        confirmButtonText: 'Sair mesmo assim',
+                        cancelButtonText: 'Voltar e corrigir'
+                    }).then(answer => {
+                        if (answer.isConfirmed) window.location.href = targetHref;
+                    });
+                } else if (confirm(`${title}\n\nDeseja sair mesmo assim?`)) {
+                    window.location.href = targetHref;
+                }
+            })
+            .catch(() => {
+                window.location.href = targetHref;
+            });
+        return false;
+    };
+
+    window.toggleSelectNode = function(checkbox, id) {
+        if (!allowStructureChanges) {
+            checkbox.checked = false;
+            return;
+        }
+        if (checkbox.checked) {
+            if (!selectedNodes.includes(String(id))) selectedNodes.push(String(id));
+        } else {
+            selectedNodes = selectedNodes.filter(item => item !== String(id));
+        }
+        window.updateAgrupamentoBar();
+    };
+
+    window.updateAgrupamentoBar = function() {
+        const bar = document.getElementById('agrupamentoBar');
+        const count = document.getElementById('agrupamentoCount');
+        if (!bar || !count) return;
+        if (selectedNodes.length > 0) {
+            bar.style.display = 'flex';
+            count.innerText = selectedNodes.length === 1 ? '1 caixa selecionada (selecione +1)' : `${selectedNodes.length} caixas selecionadas`;
+        } else {
+            bar.style.display = 'none';
+        }
+    };
+
+    window.clearSelection = function() {
+        selectedNodes = [];
+        document.querySelectorAll('.node-select-chk').forEach(item => { item.checked = false; });
+        window.updateAgrupamentoBar();
+    };
+
+    window.triggerAgrupar = async function() {
+        if (!allowStructureChanges || selectedNodes.length < 2) {
+            alert('Selecione pelo menos duas caixas para agrupar.');
+            return;
+        }
+        const nomeGrupo = prompt('Digite o nome para este Agrupamento (ex: Polos, Assessorias):') || '';
+        const formData = new URLSearchParams();
+        formData.append('csrfmiddlewaretoken', getCsrfToken());
+        if (nomeGrupo.trim()) formData.append('nome_grupo', nomeGrupo.trim());
+        selectedNodes.forEach(id => formData.append('unidades_selecionadas', id));
+        const response = await fetch(agruparUrl, {
+            method: 'POST',
+            headers: { 'X-Requested-With': 'XMLHttpRequest', 'Content-Type': 'application/x-www-form-urlencoded' },
+            body: formData
+        });
+        const payload = await response.json();
+        if (!response.ok) {
+            alert(payload.html || JSON.stringify(payload.errors || payload));
+            return;
+        }
+        data = payload.data || data;
+        selectedUnitId = payload.new_group_id || selectedUnitId;
+        window.clearSelection();
+        window.renderChart();
+    };
+
+    window.deleteNode = async function(id) {
+        if (!allowStructureChanges || !confirm('Excluir esta caixinha e suas subunidades?')) return;
+        const formData = new URLSearchParams();
+        formData.append('csrfmiddlewaretoken', getCsrfToken());
+        const response = await fetch(unitDeleteUrlTemplate.replace('999999', id), {
+            method: 'POST',
+            headers: { 'X-Requested-With': 'XMLHttpRequest', 'Content-Type': 'application/x-www-form-urlencoded' },
+            body: formData
+        });
+        const payload = await response.json();
+        if (!response.ok) {
+            alert(payload.html || JSON.stringify(payload.errors || payload));
+            return;
+        }
+        data = payload.data || data;
+        selectedUnitId = null;
+        editingUnitId = null;
+        window.clearSelection();
+        window.resetSidebarForm();
+    };
+
+    window.moveNode = async function(id, direction) {
+        const urlTemplate = direction < 0 ? unitUpUrlTemplate : unitDownUrlTemplate;
+        const formData = new URLSearchParams();
+        formData.append('csrfmiddlewaretoken', getCsrfToken());
+        const response = await fetch(urlTemplate.replace('999999', id), {
+            method: 'POST',
+            headers: { 'X-Requested-With': 'XMLHttpRequest', 'Content-Type': 'application/x-www-form-urlencoded' },
+            body: formData
+        });
+        const payload = await response.json();
+        if (!response.ok) {
+            alert(payload.html || JSON.stringify(payload.errors || payload));
+            return;
+        }
+        data = payload.data || data;
+        selectedUnitId = String(id);
+        window.renderChart();
+    };
+
+    window.desagruparNode = async function(id) {
+        if (!allowStructureChanges) return;
+        const formData = new URLSearchParams();
+        formData.append('csrfmiddlewaretoken', getCsrfToken());
+        const response = await fetch(desagruparUrlTemplate.replace('999999', id), {
+            method: 'POST',
+            headers: { 'X-Requested-With': 'XMLHttpRequest', 'Content-Type': 'application/x-www-form-urlencoded' },
+            body: formData
+        });
+        const payload = await response.json();
+        if (!response.ok) {
+            alert(payload.html || JSON.stringify(payload.errors || payload));
+            return;
+        }
+        data = payload.data || data;
+        selectedUnitId = null;
+        editingUnitId = null;
+        window.resetSidebarForm();
+    };
+
+    window.importCompetencias = async function() {
+        const input = document.getElementById('competenciasImportFile');
+        if (!selectedUnitId || !input.files.length) return;
+
+        const formData = new FormData();
+        formData.append('arquivo', input.files[0]);
+        formData.append('regimento_id', document.getElementById('competenciaRegimentoId').value || '');
+        formData.append('csrfmiddlewaretoken', document.querySelector('[name=csrfmiddlewaretoken]').value);
+
+        const url = competenciasImportUrlTemplate.replace('999999', selectedUnitId);
+        const response = await fetch(url, {
+            method: 'POST',
+            headers: { 'X-Requested-With': 'XMLHttpRequest' },
+            body: formData
+        });
+        const payload = await response.json();
+        input.value = '';
+
+        if (!response.ok) {
+            alert((payload.errors && JSON.stringify(payload.errors)) || 'Não foi possível importar as competências.');
+            return;
+        }
+
+        const node = byId(selectedUnitId);
+        if (node) {
+            node.competencias = payload.competencias || [];
+            node.competenciasStatus = payload.competenciasStatus;
+            node.competenciasStatusLabel = payload.competenciasStatusLabel;
+            renderCompetencias(node);
+            window.renderChart();
+        }
+    };
+
+    document.getElementById('sidebarUnitForm').addEventListener('submit', async function(event) {
+        event.preventDefault();
+        const action = editingUnitId ? `${window.location.pathname}?edit=${editingUnitId}` : window.location.pathname;
+        const response = await fetch(action, {
+            method: 'POST',
+            headers: { 'X-Requested-With': 'XMLHttpRequest' },
+            body: new FormData(event.currentTarget)
+        });
+        const payload = await response.json();
+        if (!response.ok) {
+            const errors = document.getElementById('formErrors');
+            errors.innerText = payload.html || JSON.stringify(payload.errors || payload);
+            errors.style.display = 'block';
+            showValidationPopup(payload);
+            return;
+        }
+        data = payload.data || data;
+        window.resetSidebarForm();
+        if (payload.new_node_id) selectedUnitId = String(payload.new_node_id);
+        window.renderChart();
+        if (selectedUnitId) window.selectNode(selectedUnitId);
+    });
+
+    function applyMixedChildLayout(root, boxWidth, boxHeight) {
+        const horizontalGap = 90;
+        const verticalGap = 80;
+        const stackGap = 26;
+        const verticalIndent = 70;
+
+        function layoutForChildren(node) {
+            if (isModeloBuilder) {
+                const isTopLayoutSource = !node.parent || node.id === '__virtual_root__';
+                return isTopLayoutSource ? 'H' : 'V';
+            }
+            return node.data.layout_filhos || 'V';
+        }
+
+        function measure(node) {
+            const children = node.children || [];
+            const childLayouts = children.map(measure);
+            let width = boxWidth;
+            let height = boxHeight;
+
+            if (children.length) {
+                if (layoutForChildren(node) === 'V') {
+                    width = Math.max(boxWidth, verticalIndent + Math.max(...childLayouts.map(layout => layout.width)));
+                    height = boxHeight + verticalGap
+                        + childLayouts.reduce((total, layout) => total + layout.height, 0)
+                        + stackGap * Math.max(children.length - 1, 0);
+                } else {
+                    const childrenWidth = childLayouts.reduce((total, layout) => total + layout.width, 0)
+                        + horizontalGap * Math.max(children.length - 1, 0);
+                    width = Math.max(boxWidth, childrenWidth);
+                    height = boxHeight + verticalGap + Math.max(...childLayouts.map(layout => layout.height));
+                }
+            }
+
+            node._mixedLayout = { width, height };
+            return node._mixedLayout;
+        }
+
+        function place(node, left, top) {
+            const layout = node._mixedLayout;
+            const children = node.children || [];
+            node.x = left + layout.width / 2;
+            node.y = top + boxHeight / 2;
+
+            if (!children.length) return;
+
+            if (layoutForChildren(node) === 'V') {
+                let childTop = top + boxHeight + verticalGap;
+                children.forEach(child => {
+                    const childLayout = child._mixedLayout;
+                    const childLeft = left + verticalIndent;
+                    place(child, childLeft, childTop);
+                    childTop += childLayout.height + stackGap;
+                });
+                return;
+            }
+
+            const childrenWidth = children.reduce((total, child) => total + child._mixedLayout.width, 0)
+                + horizontalGap * Math.max(children.length - 1, 0);
+            let childLeft = left + (layout.width - childrenWidth) / 2;
+            const childTop = top + boxHeight + verticalGap;
+            children.forEach(child => {
+                place(child, childLeft, childTop);
+                childLeft += child._mixedLayout.width + horizontalGap;
+            });
+        }
+
+        measure(root);
+        place(root, 0, 0);
+    }
+
+    function linkPathForMixedLayout(link, boxWidth) {
+        if (link.target.id === '__virtual_root__') return '';
+
+        const sx = link.source.x;
+        const sy = link.source.y + 70;
+        const tx = link.target.x;
+        const ty = link.target.y - 70;
+
+        const sourceLayout = isModeloBuilder
+            ? ((!link.source.parent || link.source.id === '__virtual_root__') ? 'H' : 'V')
+            : (link.source.data.layout_filhos || 'V');
+
+        if (sourceLayout === 'V') {
+            const sourceLeft = sx - boxWidth / 2;
+            const targetLeft = tx - boxWidth / 2;
+            const targetSideY = link.target.y;
+            const spineX = sourceLeft;
+            return `M${spineX},${sy} V${targetSideY} H${targetLeft}`;
+        }
+
+        const midY = (sy + ty) / 2;
+        return `M${sx},${sy} V${midY} H${tx} V${ty}`;
+    }
+
+    window.renderChart = function() {
+        const container = d3.select('#orgChartContainer');
+        const element = document.getElementById('orgChartContainer');
+        container.html('');
+
+        if (!data.length) {
+            element.innerHTML = '<div style="height:100%; display:flex; align-items:center; justify-content:center; color:#95a5a6;">Nenhuma unidade cadastrada neste organograma.</div>';
+            return;
+        }
+
+        const processedData = data.map(item => ({ ...item }));
+        const roots = processedData.filter(item => !item.parentId);
+        let rootNodeId = null;
+        if (roots.length > 1) {
+            rootNodeId = '__virtual_root__';
+            processedData.push({ id: rootNodeId, parentId: '', name: 'Raiz Virtual', sigla: '' });
+            processedData.forEach(item => {
+                if (item.id !== rootNodeId && !item.parentId) item.parentId = rootNodeId;
+            });
+        }
+
+        const root = d3.stratify()
+            .id(item => item.id)
+            .parentId(item => item.parentId || null)(processedData);
+
+        const boxWidth = 400;
+        const boxHeight = 150;
+        applyMixedChildLayout(root, boxWidth, boxHeight);
+        window.currentRoot = root;
+
+        const svg = container.append('svg')
+            .attr('width', '100%')
+            .attr('height', '100%')
+            .style('overflow', 'hidden');
+        const canvas = svg.append('g').attr('class', 'canvas-group');
+        const zoom = d3.zoom()
+            .scaleExtent([0.25, 2.5])
+            .on('zoom', event => canvas.attr('transform', event.transform));
+        svg.call(zoom);
+        window.currentSvg = svg;
+        window.currentCanvas = canvas;
+        window.currentZoom = zoom;
+
+        canvas.selectAll('.link')
+            .data(root.links().filter(link => link.source.id !== rootNodeId))
+            .join('path')
+            .attr('class', 'link')
+            .attr('d', link => linkPathForMixedLayout(link, boxWidth))
+            .attr('fill', 'none')
+            .attr('stroke', '#bdc3c7')
+            .attr('stroke-width', 2)
+            .attr('stroke-dasharray', link => link.target.data.ligacaoIndireta ? '5,5' : 'none');
+
+        const nodes = canvas.selectAll('.node')
+            .data(root.descendants().filter(node => node.id !== rootNodeId))
+            .join('g')
+            .attr('class', 'node')
+            .attr('transform', node => `translate(${node.x - boxWidth / 2},${node.y - 75})`);
+
+        nodes.append('foreignObject')
+            .attr('width', boxWidth)
+            .attr('height', 180)
+            .html(node => nodeHtml(node.data));
+
+        window.recenterChart = function() {
+            if (!root.descendants().length) return;
+            const width = element.clientWidth || 800;
+            const height = element.clientHeight || 600;
+            const visible = root.descendants().filter(node => node.id !== rootNodeId);
+            const minX = d3.min(visible, node => node.x - boxWidth / 2) || 0;
+            const maxX = d3.max(visible, node => node.x + boxWidth / 2) || boxWidth;
+            const minY = d3.min(visible, node => node.y - 90) || 0;
+            const maxY = d3.max(visible, node => node.y + 110) || boxHeight;
+            const contentW = Math.max(maxX - minX, 1);
+            const contentH = Math.max(maxY - minY, 1);
+            const scale = Math.min(1, Math.max(0.25, Math.min((width - 80) / contentW, (height - 80) / contentH)));
+            svg.transition().duration(450).call(
+                zoom.transform,
+                d3.zoomIdentity
+                    .translate(width / 2 - ((minX + maxX) / 2) * scale, height / 2 - ((minY + maxY) / 2) * scale)
+                    .scale(scale)
+            );
+        };
+
+        setTimeout(window.recenterChart, 0);
+    };
+
+    function nodeHtml(node) {
+        if (node.is_agrupamento) {
+            return `
+                <div class="node-box ${String(node.id) === selectedUnitId ? 'selected' : ''}" onclick="window.selectNode('${node.id}')" style="border-style:dashed; background:#eef2f5;">
+                    <div class="node-box-actions">
+                        ${allowStructureChanges ? `<button type="button" title="Desagrupar" onclick="event.stopPropagation(); window.desagruparNode('${node.id}')"><i class="fa-solid fa-folder-open"></i></button>` : ''}
+                    </div>
+                    <div class="node-box-list-body"><h4>${escapeHtml(node.name || 'Caixa de Agrupamento')}</h4></div>
+                </div>
+            `;
+        }
+        const pending = node.isPendingDefinition ? 'node-pending-definition' : '';
+        const selected = String(node.id) === selectedUnitId ? 'selected' : '';
+        const hasChildren = data.some(item => String(item.parentId) === String(node.id));
+        const pendingBadge = node.isPendingDefinition ? '<div class="pending-badge">Definição pendente</div>' : '';
+        const competenciasLabel = node.competenciasStatusLabel || '';
+        const competenciasClass = competenciasLabel.toLowerCase().includes('sem compet')
+            ? 'org-export-competencias-status competencias-empty-warning'
+            : 'org-export-competencias-status';
+        return `
+            <div class="node-box ${pending} ${selected}" onclick="window.selectNode('${node.id}')">
+                ${allowStructureChanges ? `<input type="checkbox" class="node-select-chk" onclick="event.stopPropagation(); window.toggleSelectNode(this, '${node.id}')">` : ''}
+                <div class="node-box-actions">
+                    ${hasChildren ? `<button type="button" title="Expandir/Recolher" onclick="event.stopPropagation(); window.toggleExpand('${node.id}')"><i class="fa-solid fa-chevron-down"></i></button>` : ''}
+                    <button type="button" title="Subir" onclick="event.stopPropagation(); window.moveNode('${node.id}', -1)"><i class="fa-solid fa-arrow-up"></i></button>
+                    <button type="button" title="Descer" onclick="event.stopPropagation(); window.moveNode('${node.id}', 1)"><i class="fa-solid fa-arrow-down"></i></button>
+                    <button type="button" title="Editar" onclick="event.stopPropagation(); window.selectNode('${node.id}')"><i class="fa-solid fa-pen"></i></button>
+                    ${allowStructureChanges ? `<button type="button" title="Excluir" onclick="event.stopPropagation(); window.deleteNode('${node.id}')"><i class="fa-solid fa-trash"></i></button>` : ''}
+                </div>
+                <div class="node-box-list-header">${escapeHtml(node.name)}</div>
+                <div class="node-box-list-body">
+                    <h4>${escapeHtml(node.sigla)}</h4>
+                    <div style="font-weight:600; color:#34495e;">${escapeHtml(node.role)}</div>
+                    ${node.roleSigla ? `<div style="margin-top:4px; padding:2px 6px; border-radius:4px; background:#ecf0f1; color:#7f8c8d; font-size:11px;">${escapeHtml(node.roleSigla)}</div>` : ''}
+                    <div class="${competenciasClass}"><i class="fa-solid fa-scale-balanced"></i> ${escapeHtml(competenciasLabel)}</div>
+                </div>
+                ${pendingBadge}
+            </div>
+        `;
+    }
+
+    bindFormRules();
+    window.renderChart();
+</script>
+{% endblock %}

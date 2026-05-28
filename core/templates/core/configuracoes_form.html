@@ -1,0 +1,112 @@
+{% extends 'base.html' %}
+
+{% block title %}{{ title }} | IFMG OrgRepo{% endblock %}
+
+{% block extra_css %}
+<style>
+    .form-group {
+        margin-bottom: 18px;
+    }
+    .form-group label {
+        display: block;
+        font-weight: 600;
+        font-size: 0.9rem;
+        margin-bottom: 6px;
+        color: #34495e;
+    }
+    .form-control {
+        width: 100%;
+        padding: 10px 12px;
+        border: 1px solid #dcdde1;
+        border-radius: 6px;
+        font-size: 0.9rem;
+        color: #2c3e50;
+        background-color: #fff;
+        transition: border-color 0.2s, box-shadow 0.2s;
+    }
+    .form-control:focus {
+        border-color: var(--if-green);
+        outline: none;
+        box-shadow: 0 0 0 3px rgba(46, 139, 87, 0.15);
+    }
+    .checkbox-container {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        margin: 8px 0;
+        cursor: pointer;
+        user-select: none;
+    }
+    .checkbox-container input[type="checkbox"] {
+        width: 18px;
+        height: 18px;
+        accent-color: var(--if-green);
+        cursor: pointer;
+        margin: 0;
+    }
+    .checkbox-container label {
+        margin: 0;
+        font-weight: 500;
+        font-size: 0.9rem;
+        color: #34495e;
+        cursor: pointer;
+    }
+    .help-text {
+        display: block;
+        color: #7f8c8d;
+        font-size: 0.78rem;
+        margin-top: 4px;
+        line-height: 1.35;
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="animate-fade" style="max-width: 500px; margin: 40px auto;">
+    <div style="margin-bottom: 20px; display: flex; align-items: center; gap: 10px;">
+        <a href="{% url back_url %}" style="text-decoration: none; color: #7f8c8d; font-weight: 500;">
+            <i class="fa-solid fa-arrow-left"></i> Voltar
+        </a>
+        <h3 style="margin: 0; color: var(--if-green); font-weight: 600;">{{ title }}</h3>
+    </div>
+
+    <div style="background: white; border-radius: 8px; border: 1px solid #e1e4e8; padding: 25px; box-shadow: 0 2px 5px rgba(0,0,0,0.05);">
+        <form method="post" style="display: flex; flex-direction: column; gap: 15px;">
+            {% csrf_token %}
+            
+            {% for field in form %}
+                <div class="form-group">
+                    {% if field.field.widget.input_type == 'checkbox' %}
+                        <div class="checkbox-container">
+                            {{ field }}
+                            <label for="{{ field.id_for_label }}">
+                                {{ field.label }}
+                            </label>
+                        </div>
+                    {% else %}
+                        <label for="{{ field.id_for_label }}">
+                            {{ field.label }}
+                        </label>
+                        {{ field }}
+                    {% endif %}
+                    {% if field.help_text %}
+                        <small class="help-text">{{ field.help_text }}</small>
+                    {% endif %}
+                    {% if field.errors %}
+                        <div style="color: var(--if-red); font-size: 0.8rem; margin-top: 4px;">{{ field.errors }}</div>
+                    {% endif %}
+                </div>
+            {% endfor %}
+            
+            <div style="display: flex; gap: 10px; margin-top: 10px;">
+                <button type="submit" class="btn-submit" style="flex: 2;">
+                    <i class="fa-solid fa-floppy-disk"></i> Salvar
+                </button>
+                <a href="{% url back_url %}" class="btn-submit" style="background: #bdc3c7; flex: 1; text-align: center; text-decoration: none; padding-top: 10px; font-size: 0.9rem;">
+                    Cancelar
+                </a>
+            </div>
+        </form>
+    </div>
+</div>
+{% endblock %}

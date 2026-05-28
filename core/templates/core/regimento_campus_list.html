@@ -1,0 +1,83 @@
+{% extends 'base.html' %}
+
+{% block title %}Regimentos | IFMG OrgRepo{% endblock %}
+
+{% block content %}
+<div class="animate-fade" style="max-width: 1100px; margin: 20px auto;">
+    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px;">
+        <h3 style="color: var(--if-green); font-weight: 600; margin: 0;"><i class="fa-solid fa-scale-balanced"></i> Regimentos dos Campi</h3>
+        <a href="javascript:history.back()" style="text-decoration: none; color: #7f8c8d; font-weight: 500;">
+            <i class="fa-solid fa-arrow-left"></i> Voltar
+        </a>
+    </div>
+
+    <div style="display: grid; grid-template-columns: minmax(320px, 420px) 1fr; gap: 20px; align-items: start;">
+        <form method="post" enctype="multipart/form-data" style="background: white; border: 1px solid #e1e4e8; border-radius: 8px; padding: 20px; box-shadow: 0 2px 5px rgba(0,0,0,0.05);">
+            {% csrf_token %}
+            <h4 style="margin: 0 0 15px; color: #2c3e50;">Novo regimento</h4>
+            {% if form.non_field_errors %}
+            <div style="color: var(--if-red); background: #fff5f5; border: 1px solid #fed7d7; border-radius: 6px; padding: 10px 12px; font-size: 0.85rem; margin-bottom: 12px;">
+                {{ form.non_field_errors }}
+            </div>
+            {% endif %}
+            {% for field in form %}
+            <div style="margin-bottom: 12px;">
+                <label for="{{ field.id_for_label }}" style="display: block; font-weight: 600; font-size: 0.9rem; color: #34495e; margin-bottom: 4px;">{{ field.label }}</label>
+                {{ field }}
+                {% if field.errors %}<div style="color: var(--if-red); font-size: 0.8rem; margin-top: 4px;">{{ field.errors }}</div>{% endif %}
+            </div>
+            {% endfor %}
+            <button type="submit" class="btn-submit" style="width: 100%; border: none; border-radius: 6px; padding: 10px 14px;">
+                <i class="fa-solid fa-floppy-disk"></i> Salvar Regimento
+            </button>
+        </form>
+
+        <div style="background: white; border: 1px solid #e1e4e8; border-radius: 8px; overflow: hidden; box-shadow: 0 2px 5px rgba(0,0,0,0.05);">
+            <table style="width: 100%; border-collapse: collapse;">
+                <thead style="background: #f8fafc;">
+                    <tr>
+                        <th style="padding: 12px; text-align: left;">Campus</th>
+                        <th style="padding: 12px; text-align: left;">Regimento</th>
+                        <th style="padding: 12px; text-align: center;">Tipo</th>
+                        <th style="padding: 12px; text-align: center;">Situação</th>
+                        <th style="padding: 12px; text-align: right;">Ações</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for regimento in regimentos %}
+                    <tr style="border-top: 1px solid #edf2f7;">
+                        <td style="padding: 12px; font-weight: 600;">{{ regimento.campus.sigla }}</td>
+                        <td style="padding: 12px;">
+                            <div style="font-weight: 600; color: #2c3e50;">{{ regimento.nome }}</div>
+                            <div style="font-size: 0.82rem; color: #7f8c8d;">{{ regimento.numero|default:"Sem número" }}{% if regimento.data_publicacao %} · {{ regimento.data_publicacao|date:"d/m/Y" }}{% endif %}</div>
+                        </td>
+                        <td style="padding: 12px; text-align: center;">
+                            <span style="background: #eef6f1; color: var(--if-green); padding: 4px 8px; border-radius: 4px; font-size: 0.78rem; font-weight: 700;">{{ regimento.get_tipo_display }}</span>
+                        </td>
+                        <td style="padding: 12px; text-align: center;">
+                            {% if regimento.vigente %}
+                            <span style="color: var(--if-green); font-weight: 700;"><i class="fa-solid fa-circle-check"></i> Vigente</span>
+                            {% else %}
+                            <span style="color: #7f8c8d;">Histórico</span>
+                            {% endif %}
+                        </td>
+                        <td style="padding: 12px; text-align: right;">
+                            {% if regimento.arquivo %}
+                            <a href="{{ regimento.arquivo.url }}" target="_blank" style="color: #3498db; margin-right: 10px;" title="Abrir arquivo"><i class="fa-solid fa-file-pdf"></i></a>
+                            {% elif regimento.link %}
+                            <a href="{{ regimento.link }}" target="_blank" style="color: #3498db; margin-right: 10px;" title="Abrir link"><i class="fa-solid fa-arrow-up-right-from-square"></i></a>
+                            {% endif %}
+                            <a href="{% url 'regimento_campus_editar' regimento.pk %}" style="color: #3498db;" title="Editar"><i class="fa-solid fa-pen"></i></a>
+                        </td>
+                    </tr>
+                    {% empty %}
+                    <tr>
+                        <td colspan="5" style="padding: 30px; text-align: center; color: #95a5a6;">Nenhum regimento cadastrado.</td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+</div>
+{% endblock %}

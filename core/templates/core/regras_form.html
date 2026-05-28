@@ -1,0 +1,81 @@
+{% extends 'base.html' %}
+
+{% block title %}Regras do Modelo {{ modelo.nome }} | IFMG OrgRepo{% endblock %}
+
+{% block content %}
+<div class="animate-fade" style="max-width: 900px; margin: 40px auto;">
+    <div style="margin-bottom: 20px; display: flex; align-items: center; gap: 10px;">
+        <a href="{% url 'modelo_referencial_list' %}" style="text-decoration: none; color: #7f8c8d; font-weight: 500;">
+            <i class="fa-solid fa-arrow-left"></i> Voltar
+        </a>
+        <h3 style="margin: 0; color: var(--if-green); font-weight: 600;">Regras de Governan&ccedil;a</h3>
+    </div>
+
+    <p style="color: #7f8c8d; font-size: 0.9rem; margin-bottom: 20px;">
+        Configure as regras normativas da Resolu&ccedil;&atilde;o CONSUP n&ordm; 44/2025 para estruturas que usam <strong>{{ modelo.nome }}</strong> como refer&ecirc;ncia.
+    </p>
+    <p style="color: #5f6c7b; font-size: 0.85rem; margin-top: -8px; margin-bottom: 20px;">
+        Cada item abaixo explica o que a configura&ccedil;&atilde;o controla e qual impacto ela tem na valida&ccedil;&atilde;o do organograma.
+    </p>
+
+    <div style="background: white; border-radius: 8px; border: 1px solid #e1e4e8; padding: 25px; box-shadow: 0 2px 5px rgba(0,0,0,0.05);">
+        <form method="post" style="display: flex; flex-direction: column; gap: 15px;">
+            {% csrf_token %}
+            <input type="hidden" name="form_kind" value="base_rules">
+
+            {% for field in form %}
+                <div class="form-group">
+                    <label style="display: block; font-weight: 600; font-size: 0.9rem; margin-bottom: 6px; color: #34495e;">
+                        {{ field.label }}
+                    </label>
+                    <div style="margin-bottom: 5px;">{{ field }}</div>
+                    {% if field.help_text %}
+                        <small style="color: #95a5a6; font-size: 0.8rem; display: block; line-height: 1.3;">{{ field.help_text|safe }}</small>
+                    {% endif %}
+                    {% if field.errors %}
+                        <div style="color: var(--if-red); font-size: 0.8rem; margin-top: 4px;">{{ field.errors }}</div>
+                    {% endif %}
+                </div>
+            {% endfor %}
+
+            <div style="border-top: 1px solid #e8edf2; margin-top: 10px; padding-top: 20px;">
+                <h4 style="margin: 0 0 8px; color: #34495e;">Cotas de CD/FG</h4>
+                <p style="color: #7f8c8d; font-size: 0.85rem; margin: 0 0 14px;">
+                    Informe a quantidade dispon&iacute;vel para cada varia&ccedil;&atilde;o de cargo ou fun&ccedil;&atilde;o deste modelo.
+                </p>
+                {{ cotas_formset.management_form }}
+                {% for quota_form in cotas_formset %}
+                    <div style="display: grid; grid-template-columns: minmax(240px, 1fr) minmax(120px, 160px) minmax(90px, auto); gap: 14px; align-items: end; margin-bottom: 12px;">
+                        {% for hidden in quota_form.hidden_fields %}{{ hidden }}{% endfor %}
+                        <div>
+                            <label style="display:block; font-size:0.8rem; font-weight:700; color:#596275; margin-bottom:4px;">Cargo/Fun&ccedil;&atilde;o</label>
+                            {{ quota_form.cargo_funcao }}
+                            {% if quota_form.cargo_funcao.errors %}<div style="color: var(--if-red); font-size: 0.8rem;">{{ quota_form.cargo_funcao.errors }}</div>{% endif %}
+                        </div>
+                        <div>
+                            <label style="display:block; font-size:0.8rem; font-weight:700; color:#596275; margin-bottom:4px;">Quantidade</label>
+                            {{ quota_form.quantidade }}
+                            {% if quota_form.quantidade.errors %}<div style="color: var(--if-red); font-size: 0.8rem;">{{ quota_form.quantidade.errors }}</div>{% endif %}
+                        </div>
+                        {% if quota_form.DELETE %}
+                        <label style="display:flex; align-items:center; gap:6px; color:#7f8c8d; font-size:0.82rem; padding-bottom: 9px; white-space: nowrap;">
+                            {{ quota_form.DELETE }} Remover
+                        </label>
+                        {% endif %}
+                    </div>
+                    {% if quota_form.non_field_errors %}
+                        <div style="color: var(--if-red); font-size: 0.8rem; margin-bottom: 8px;">{{ quota_form.non_field_errors }}</div>
+                    {% endif %}
+                {% endfor %}
+                {% if cotas_formset.non_form_errors %}
+                    <div style="color: var(--if-red); font-size: 0.8rem;">{{ cotas_formset.non_form_errors }}</div>
+                {% endif %}
+            </div>
+
+            <button type="submit" class="btn-submit" style="margin-top: 10px;">
+                <i class="fa-solid fa-floppy-disk"></i> Salvar Regras do Modelo
+            </button>
+        </form>
+    </div>
+</div>
+{% endblock %}

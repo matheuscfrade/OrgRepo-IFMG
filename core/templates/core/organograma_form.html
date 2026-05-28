@@ -1,0 +1,219 @@
+{% extends 'base.html' %}
+
+{% block title %}Novo Organograma | IFMG OrgRepo{% endblock %}
+{% block page_title %}Cadastrar Organograma{% endblock %}
+
+{% block extra_css %}
+<style>
+    .form-container {
+        max-width: 600px;
+        margin: 0 auto;
+        background: white;
+        padding: 30px;
+        border-radius: 12px;
+        box-shadow: var(--card-shadow);
+        border-top: 4px solid var(--if-green);
+    }
+    .form-group {
+        margin-bottom: 20px;
+    }
+    .form-group label {
+        display: block;
+        font-weight: 600;
+        margin-bottom: 8px;
+        color: var(--text-color);
+    }
+    .form-control {
+        width: 100%;
+        padding: 12px;
+        border: 1px solid #dfe4ea;
+        border-radius: 6px;
+        font-size: 1rem;
+        transition: border-color 0.2s;
+        font-family: inherit;
+    }
+    .form-control:focus {
+        outline: none;
+        border-color: var(--if-green);
+        box-shadow: 0 0 0 3px rgba(46, 139, 87, 0.1);
+    }
+    .form-control-file {
+        padding: 10px 0;
+    }
+    .form-actions {
+        display: flex;
+        justify-content: flex-end;
+        gap: 15px;
+        margin-top: 30px;
+        padding-top: 20px;
+        border-top: 1px solid #f1f2f6;
+    }
+    .btn-secondary {
+        padding: 10px 20px;
+        background: #f1f2f6;
+        color: var(--sidebar-text);
+        border-radius: 6px;
+        text-decoration: none;
+        font-weight: 600;
+        transition: background 0.2s;
+        display: inline-flex;
+        align-items: center;
+    }
+    .btn-secondary:hover { background: #dfe4ea; }
+    .help-text {
+        font-size: 0.85rem;
+        color: #95a5a6;
+        margin-top: 5px;
+    }
+    @keyframes highlight-suggested {
+        0% { border-color: #dfe4ea; }
+        50% { border-color: var(--if-green); box-shadow: 0 0 10px rgba(46, 139, 87, 0.3); }
+        100% { border-color: #dfe4ea; }
+    }
+    .is-suggested {
+        animation: highlight-suggested 2s ease-in-out;
+    }
+    .field-utilizar_modelo {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        background: #f8f9fa;
+        padding: 15px;
+        border-radius: 8px;
+        border: 1px dashed #ced4da;
+        margin-top: 10px;
+    }
+    .field-utilizar_modelo label {
+        margin-bottom: 0 !important;
+        cursor: pointer;
+    }
+    .form-check-input {
+        width: 20px;
+        height: 20px;
+        cursor: pointer;
+    }
+    .field-modelo_referencial {
+        transition: all 0.3s ease;
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="animate-fade">
+    <div class="form-container">
+        {% if is_edit %}
+        <h2 style="margin-bottom: 5px; color: #3498db;">Editar Metadados do Organograma</h2>
+        {% if organograma.status == 'PROPOSTA' %}
+        <p style="color: #7f8c8d; font-size: 0.9rem; margin-bottom: 12px;">Confirme a resolução e os regimentos que fundamentam esta nova versão antes da aprovação da proposta.</p>
+        <div style="background: #fff7e6; border: 1px solid #f6d28b; color: #8a5b00; border-radius: 8px; padding: 10px 12px; font-size: 0.85rem; margin-bottom: 22px;">
+            A proposta nasce herdando os metadados do organograma oficial. Altere aqui a Resolução de Estrutura e, quando necessário, o Regimento Interno e o Regimento Geral de referência.
+        </div>
+        {% else %}
+        <p style="color: #7f8c8d; font-size: 0.9rem; margin-bottom: 25px;">Atualize as informações administrativas do campus e documentos de aprovação.</p>
+        {% endif %}
+        {% else %}
+        <h2 style="margin-bottom: 5px; color: var(--if-green-dark);">Nova Proposta de Organograma</h2>
+        <p style="color: #7f8c8d; font-size: 0.9rem; margin-bottom: 25px;">Preencha os dados abaixo para registrar uma nova estrutura.</p>
+        {% endif %}
+        
+        <form method="post" enctype="multipart/form-data">
+            {% csrf_token %}
+            
+            {% for field in form %}
+            <div class="form-group field-{{ field.name }}">
+                {{ field.label_tag }}
+                {{ field }}
+                {% if field.help_text %}
+                    <p class="help-text">{{ field.help_text }}</p>
+                {% endif %}
+                {% if field.errors %}
+                    <div style="color: var(--if-red); font-size: 0.85rem; margin-top: 5px;">
+                        {{ field.errors }}
+                    </div>
+                {% endif %}
+            </div>
+            {% endfor %}
+
+            <script>
+                document.addEventListener('DOMContentLoaded', function() {
+                    const campusSelect = document.getElementById('id_campus');
+                    const modeloSelect = document.getElementById('id_modelo_referencial');
+                    const usarModeloCheckbox = document.getElementById('id_utilizar_modelo');
+                    const regimentoGeralFields = document.querySelectorAll('.field-regimento_geral_referencia');
+                    const modeloFieldWrapper = document.querySelector('.field-modelo_referencial');
+                    
+                    function toggleRegimentoGeral() {
+                        const selectedOption = campusSelect.options[campusSelect.selectedIndex];
+                        const campusText = selectedOption ? selectedOption.text : "";
+                        const isReitoria = campusText.includes('(IFMG)');
+                        
+                        regimentoGeralFields.forEach(field => {
+                            field.style.display = isReitoria ? 'block' : 'none';
+                        });
+                    }
+
+                    function suggestModelo() {
+                        if (modeloFieldWrapper) modeloFieldWrapper.style.display = 'block';
+
+                        const selectedCampus = campusSelect.options[campusSelect.selectedIndex];
+                        if (!selectedCampus || !modeloSelect) return;
+                        
+                        const dimensionamento = selectedCampus.getAttribute('data-dimensionamento');
+                        console.log("Dimensionamento do Campus selecionado:", dimensionamento);
+                        
+                        if (dimensionamento) {
+                            let matchFound = false;
+                            for (let i = 0; i < modeloSelect.options.length; i++) {
+                                const opt = modeloSelect.options[i];
+                                const optDim = opt.getAttribute('data-dimensionamento');
+                                if (optDim === dimensionamento) {
+                                    console.log("Correspondência encontrada! Selecionando modelo:", opt.text);
+                                    if (!modeloSelect.value) {
+                                        modeloSelect.selectedIndex = i;
+                                    }
+                                    matchFound = true;
+                                    break;
+                                }
+                            }
+                            if (!matchFound) {
+                                console.warn("Nenhum modelo referencial encontrado para o dimensionamento:", dimensionamento);
+                            }
+                        }
+                    }
+                    
+                    if (campusSelect) {
+                        campusSelect.addEventListener('change', function() {
+                            toggleRegimentoGeral();
+                            suggestModelo();
+                        });
+                        
+                        if (usarModeloCheckbox) {
+                            usarModeloCheckbox.addEventListener('change', suggestModelo);
+                        }
+
+                        // Executa no carregamento inicial e tenta de novo se falhar
+                        toggleRegimentoGeral();
+                        
+                        const initialCheck = () => {
+                            console.log("Tentativa de sugestão automática...");
+                            suggestModelo();
+                        };
+                        
+                        setTimeout(initialCheck, 100);
+                        setTimeout(initialCheck, 500);
+                        setTimeout(initialCheck, 1500);
+                    }
+                });
+            </script>
+
+            <div class="form-actions">
+                <a href="{% if next_url %}{{ next_url }}{% elif organograma.status == 'PROPOSTA' and related_solicitacao %}{% url 'solicitacao_detail' related_solicitacao.pk %}{% else %}{% url 'organograma_list' %}{% endif %}" class="btn-secondary">Cancelar</a>
+                {% if next_url %}<input type="hidden" name="next" value="{{ next_url }}">{% endif %}
+                <button type="submit" class="btn-primary">
+                    <i class="fa-solid fa-check"></i> Salvar Registro
+                </button>
+            </div>
+        </form>
+    </div>
+</div>
+{% endblock %}

@@ -1,0 +1,46 @@
+# =============================================================================
+# OrgRepo - Base / Production Dependencies
+# These are required in ALL environments (dev, test, prod).
+# =============================================================================
+
+Django>=6.0,<7.0
+
+# Database
+# For production we strongly recommend PostgreSQL.
+# Use psycopg 3 (binary wheel for easy install on Windows/macOS/Linux).
+psycopg[binary]>=3.1
+
+# Environment variable parsing (12-factor config)
+python-dotenv>=1.0
+# Alternative (more powerful): django-environ or pydantic-settings
+# django-environ>=0.11
+
+# Static files in production (simple, no extra services needed)
+whitenoise>=6.6
+
+# Optional but recommended for production file storage (media PDFs)
+# django-storages[s3]>=1.14
+# boto3>=1.34
+
+# Security / production hardening helpers (used in settings)
+# django-csp>=3.8          # Content-Security-Policy (future)
+# django-axes>=6.0         # Login attempt throttling (future)
+
+# Environment & Database
+python-dotenv>=1.0
+dj-database-url>=2.1
+whitenoise>=6.6
+
+# Production media storage (optional)
+# django-storages[s3]>=1.14
+# boto3>=1.34
+
+# Production server
+gunicorn>=21.2
+
+# -----------------------------------------------------------------------------
+# Notes:
+# - After cloning, generate the full pinned list with:
+#     pip install -r requirements/base.txt
+#     pip freeze > requirements/base.txt   # (then prune dev-only lines)
+# - For local Postgres testing use the same base + docker-compose.

@@ -1,0 +1,5 @@
+# Convenience file for quick "pip install -r requirements.txt"
+# Points to the development set (includes base + dev tools).
+# For production deploys use: pip install -r requirements/base.txt
+
+-r requirements/dev.txt

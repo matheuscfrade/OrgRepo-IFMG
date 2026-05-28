@@ -1,0 +1,338 @@
+{% extends 'base.html' %}
+
+{% block title %}Histórico de Organogramas | IFMG OrgRepo{% endblock %}
+{% block page_title %}Histórico de Organogramas{% endblock %}
+
+{% block extra_css %}
+<style>
+    .grid-container {
+        display: grid;
+        grid-template-columns: repeat(auto-fill, minmax(320px, 1fr));
+        gap: 25px;
+    }
+
+    .org-card {
+        background: #ffffff;
+        border-radius: 10px;
+        padding: 25px;
+        border-top: 4px solid #3498db; /* Azul para histórico */
+        box-shadow: var(--card-shadow);
+        transition: transform 0.2s, box-shadow 0.2s;
+        display: flex;
+        flex-direction: column;
+    }
+
+    .org-card:hover {
+        transform: translateY(-5px);
+        box-shadow: 0 8px 25px rgba(0,0,0,0.08);
+    }
+
+    .card-header {
+        display: flex;
+        align-items: center;
+        gap: 15px;
+        margin-bottom: 20px;
+    }
+
+    .campus-icon {
+        width: 48px;
+        height: 48px;
+        background-color: #e1f5fe;
+        color: #0288d1;
+        border-radius: 12px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-size: 1.5rem;
+    }
+
+    .campus-details h3 {
+        color: var(--text-color);
+        font-size: 1.1rem;
+        margin-bottom: 4px;
+        font-weight: 600;
+    }
+
+    .campus-details .badge {
+        font-size: 0.75rem;
+        background-color: #e1f5fe;
+        color: #0288d1;
+        padding: 4px 8px;
+        border-radius: 4px;
+        font-weight: 600;
+    }
+
+    .card-body {
+        flex: 1;
+        font-size: 0.95rem;
+        color: #7f8c8d;
+        margin-bottom: 25px;
+    }
+    
+    .info-row {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        margin-bottom: 8px;
+    }
+    
+    .info-row i {
+        color: #bdc3c7;
+        width: 16px;
+    }
+
+    .card-footer {
+        margin-top: auto;
+    }
+
+    .btn-outline {
+        display: block;
+        text-align: center;
+        padding: 10px 15px;
+        background: transparent;
+        color: #3498db;
+        border: 2px solid #3498db;
+        border-radius: 6px;
+        font-weight: 600;
+        text-decoration: none;
+        transition: all var(--transition-speed);
+    }
+
+    .btn-outline:hover {
+        background: #3498db;
+        color: white;
+    }
+
+    .empty-state {
+        text-align: center;
+        padding: 60px 20px;
+        background: white;
+        border-radius: 10px;
+        box-shadow: var(--card-shadow);
+        grid-column: 1 / -1;
+    }
+    .filter-panel {
+        background: white;
+        border: 1px solid #e8edf2;
+        border-radius: 8px;
+        padding: 18px;
+        margin-bottom: 24px;
+        box-shadow: var(--card-shadow);
+    }
+    .filter-grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(170px, 1fr));
+        gap: 14px;
+        align-items: end;
+    }
+    .filter-field label {
+        display: block;
+        font-size: 0.78rem;
+        font-weight: 700;
+        color: #596275;
+        margin-bottom: 5px;
+    }
+    .filter-field input,
+    .filter-field select {
+        width: 100%;
+        border: 1px solid #dfe4ea;
+        border-radius: 6px;
+        padding: 9px 10px;
+        color: var(--text-color);
+        background: white;
+    }
+    .filter-actions {
+        display: flex;
+        gap: 8px;
+        flex-wrap: wrap;
+        grid-column: 1 / -1;
+        justify-content: flex-end;
+        padding-top: 2px;
+    }
+    .filter-actions button,
+    .filter-actions a {
+        min-height: 38px;
+        border-radius: 6px;
+        padding: 9px 14px;
+        font-weight: 700;
+        text-decoration: none;
+        border: 1px solid #3498db;
+        cursor: pointer;
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        gap: 6px;
+    }
+    .filter-actions button {
+        background: #3498db;
+        color: white;
+    }
+    .filter-actions a {
+        color: #596275;
+        border-color: #dfe4ea;
+        background: #f8fafc;
+    }
+    @media (max-width: 760px) {
+        .filter-grid {
+            grid-template-columns: 1fr;
+        }
+        .filter-actions {
+            justify-content: stretch;
+        }
+        .filter-actions button,
+        .filter-actions a {
+            flex: 1 1 120px;
+        }
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="animate-fade">
+    <form method="get" class="filter-panel">
+        <div class="filter-grid">
+            <div class="filter-field">
+                <label for="filter-q">Busca</label>
+                <input id="filter-q" type="search" name="q" value="{{ request.GET.q }}" placeholder="Campus, sigla ou documento">
+            </div>
+            <div class="filter-field">
+                <label for="filter-campus">Campus</label>
+                <select id="filter-campus" name="campus">
+                    <option value="">Todos</option>
+                    {% for campus in campus_options %}
+                    <option value="{{ campus.id }}" {% if request.GET.campus == campus.id|stringformat:"s" %}selected{% endif %}>{{ campus.sigla }} - {{ campus.nome }}</option>
+                    {% endfor %}
+                </select>
+            </div>
+            <div class="filter-field">
+                <label for="filter-dimensionamento">Dimensionamento</label>
+                <select id="filter-dimensionamento" name="dimensionamento">
+                    <option value="">Todos</option>
+                    {% for dimensionamento in dimensionamento_options %}
+                    <option value="{{ dimensionamento.id }}" {% if request.GET.dimensionamento == dimensionamento.id|stringformat:"s" %}selected{% endif %}>{{ dimensionamento.nome }}</option>
+                    {% endfor %}
+                </select>
+            </div>
+            <div class="filter-field">
+                <label for="filter-modelo">Modelo</label>
+                <select id="filter-modelo" name="modelo">
+                    <option value="">Todos</option>
+                    {% for modelo in modelo_options %}
+                    <option value="{{ modelo.id }}" {% if request.GET.modelo == modelo.id|stringformat:"s" %}selected{% endif %}>{{ modelo.nome }}</option>
+                    {% endfor %}
+                </select>
+            </div>
+            <div class="filter-field">
+                <label for="filter-versao">Versao</label>
+                <input id="filter-versao" name="versao" value="{{ request.GET.versao }}" placeholder="v1, v2, v3">
+            </div>
+            <div class="filter-field">
+                <label for="filter-data-inicio">Data inicial</label>
+                <input id="filter-data-inicio" type="date" name="data_inicio" value="{{ request.GET.data_inicio }}">
+            </div>
+            <div class="filter-field">
+                <label for="filter-data-fim">Data final</label>
+                <input id="filter-data-fim" type="date" name="data_fim" value="{{ request.GET.data_fim }}">
+            </div>
+            <div class="filter-field">
+                <label for="filter-documento">Documento</label>
+                <select id="filter-documento" name="documento">
+                    <option value="">Todos</option>
+                    <option value="resolucao" {% if request.GET.documento == 'resolucao' %}selected{% endif %}>Resolucao</option>
+                    <option value="regimento_interno" {% if request.GET.documento == 'regimento_interno' %}selected{% endif %}>Regimento interno</option>
+                    <option value="regimento_geral" {% if request.GET.documento == 'regimento_geral' %}selected{% endif %}>Regimento geral</option>
+                </select>
+            </div>
+            <div class="filter-field">
+                <label for="filter-ordenar">Ordenar</label>
+                <select id="filter-ordenar" name="ordenar_historico">
+                    <option value="">Versao mais recente</option>
+                    <option value="versao_antiga" {% if request.GET.ordenar_historico == 'versao_antiga' %}selected{% endif %}>Versao mais antiga</option>
+                    <option value="data_recente" {% if request.GET.ordenar_historico == 'data_recente' %}selected{% endif %}>Data mais recente</option>
+                    <option value="data_antiga" {% if request.GET.ordenar_historico == 'data_antiga' %}selected{% endif %}>Data mais antiga</option>
+                </select>
+            </div>
+            <div class="filter-actions">
+                <button type="submit"><i class="fa-solid fa-filter"></i> Filtrar</button>
+                <a href="{% url 'historico_list' %}">Limpar</a>
+            </div>
+        </div>
+    </form>
+
+    {% if campus_groups %}
+    <div class="accordion-container">
+        {% for campus, org_list in campus_groups.items %}
+        <details class="campus-group" style="margin-bottom: 25px; background: white; border-radius: 12px; box-shadow: var(--card-shadow); border-left: 5px solid #3498db;" open>
+            <summary style="padding: 20px 25px; font-size: 1.25rem; font-weight: 700; color: #2c3e50; cursor: pointer; display: flex; align-items: center; justify-content: space-between; list-style: none;">
+                <div style="display: flex; align-items: center; gap: 12px;">
+                    <i class="fa-solid fa-building-columns" style="color: #3498db; font-size: 1.4rem;"></i>
+                    <span>{{ campus.nome }}</span>
+                    <span class="badge" style="font-size: 0.75rem; background-color: #e3f2fd; color: #1e88e5; padding: 4px 10px; border-radius: 6px;">{{ campus.sigla }}</span>
+                </div>
+                <div style="display: flex; align-items: center; gap: 15px;">
+                    <span style="font-size: 0.85rem; font-weight: 600; color: #7f8c8d; background: #f5f6fa; padding: 4px 12px; border-radius: 12px;">{{ org_list|length }} Versõ{{ org_list|length|pluralize:"es,es" }}</span>
+                    <i class="fa-solid fa-chevron-down" style="color: #bdc3c7; font-size: 0.9rem;"></i>
+                </div>
+            </summary>
+            
+            <div style="padding: 0 25px 25px 25px;">
+                <hr style="margin: 0 0 20px 0; border: none; border-top: 1px solid #f1f2f6;">
+                <div class="grid-container">
+                    {% for org in org_list %}
+                    <div class="org-card" style="border-top-color: #9b59b6; position: relative;">
+                        <div style="position: absolute; top: 15px; right: 20px; font-size: 0.9rem; font-weight: 800; background: #fdf6ec; color: #e6a23c; padding: 4px 10px; border-radius: 6px; border: 1px solid #f5dab1;">
+                            {{ org.versao_calculada }}{% if org.data_aprovacao_sistema %} &middot; {{ org.data_aprovacao_sistema|date:"d/m/Y" }}{% endif %}
+                        </div>
+                        
+                        <div class="card-header" style="margin-right: 60px;">
+                            <div class="campus-icon" style="background-color: #f3e5f5; color: #9c27b0;">
+                                <i class="fa-solid fa-clock-rotate-left"></i>
+                            </div>
+                            <div class="campus-details">
+                                <h3 style="font-size: 0.95rem;">{% if org.resolucao_estrutura %}{{ org.resolucao_estrutura.nome }}{% else %}{{ org.nome_documento_aprovacao|default:"Organograma" }}{% endif %}</h3>
+                                <span class="badge" style="background-color: #f3e5f5; color: #8e24aa;">{{ org.campus.sigla }}</span>
+                            </div>
+                        </div>
+                        
+                        <div class="card-body">
+                            <div class="info-row">
+                                <i class="fa-solid fa-circle-check" style="color: #9b59b6;"></i>
+                                <span><strong>Status:</strong> Histórico</span>
+                            </div>
+                            <div class="info-row" style="margin-top: 5px;">
+                                <i class="fa-solid fa-users"></i>
+                                <span><strong>Estrutura:</strong> {{ org.unidades.count }} Unidades</span>
+                            </div>
+                            {% if org.unidades.count > 0 %}
+                            <div style="font-size: 0.8rem; padding-left: 24px; color: #95a5a6; margin-top: 5px; line-height: 1.4;">
+                                <div style="margin-bottom: 5px;">📂 <strong>Por Tipo:</strong><br> {{ org.resumo_por_tipo|safe }}</div>
+                            </div>
+                            {% endif %}
+                        </div>
+
+                        <div class="card-footer">
+                            {% if org.status == 'OFICIAL' or request.user.is_staff or request.user.is_authenticated and request.user.profile.campus == org.campus %}
+                            <a href="{% url 'organograma_detail' org.pk %}" class="btn-outline" style="border-color: #9b59b6; color: #9b59b6;">
+                                <i class="fa-solid fa-sitemap"></i> Ver Histórico
+                            </a>
+                            {% else %}
+                            <button class="btn-outline btn-disabled" style="border-color: #e74c3c; color: #e74c3c; background: transparent;" onclick="alert('Visualização restrita.');">
+                                <i class="fa-solid fa-lock"></i> Restrito
+                            </button>
+                            {% endif %}
+                        </div>
+                    </div>
+                    {% endfor %}
+                </div>
+            </div>
+        </details>
+        {% endfor %}
+    </div>
+    {% else %}
+    <div class="empty-state">
+        <i class="fa-solid fa-clock-rotate-left" style="font-size: 3rem; color: #bdc3c7; margin-bottom: 15px;"></i>
+        <p style="color: #7f8c8d; font-size: 1.1rem;">Ainda não há organogramas históricos armazenados.</p>
+    </div>
+    {% endif %}
+</div>
+{% endblock %}

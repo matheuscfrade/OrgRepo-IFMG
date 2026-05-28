@@ -1,0 +1,461 @@
+{% extends 'base.html' %}
+
+{% block title %}Solicitações de Alteração | IFMG OrgRepo{% endblock %}
+{% block page_title %}Banco de Propostas e Modificações{% endblock %}
+
+{% block extra_css %}
+<style>
+    .propose-table {
+        width: 100%;
+        max-width: 100%;
+        background: white;
+        border-radius: 12px;
+        box-shadow: var(--card-shadow);
+        border-collapse: collapse;
+        table-layout: fixed;
+        overflow: hidden;
+    }
+    .propose-table th, .propose-table td {
+        padding: 14px 16px;
+        text-align: left;
+        border-bottom: 1px solid #f1f2f6;
+        vertical-align: middle;
+    }
+    .propose-table th {
+        background: #fdfdfd;
+        color: #7f8c8d;
+        font-weight: 600;
+        font-size: 0.85rem;
+        text-transform: uppercase;
+        letter-spacing: 0.5px;
+    }
+    .propose-table th:nth-child(1), .propose-table td:nth-child(1) { width: 70px; }
+    .propose-table th:nth-child(2), .propose-table td:nth-child(2) { width: 100px; }
+    .propose-table th:nth-child(3), .propose-table td:nth-child(3) { width: 140px; }
+    .propose-table th:nth-child(5), .propose-table td:nth-child(5) { width: 160px; }
+    .propose-table th:nth-child(6), .propose-table td:nth-child(6) { width: 260px; }
+    .cell-truncate {
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+    }
+    .justification-cell {
+        line-height: 1.45;
+        white-space: normal;
+        overflow-wrap: anywhere;
+    }
+    .badge {
+        padding: 4px 10px;
+        border-radius: 12px;
+        font-size: 0.75rem;
+        font-weight: 600;
+        display: inline-block;
+    }
+    .badge-RASCUNHO { background: #f4f4f5; color: #606266; }
+    .badge-EM_ANALISE { background: #fdf6ec; color: #e6a23c; }
+    .badge-ENVIADO_CONSUP { background: #eef6ff; color: #2f80ed; }
+    .badge-DEVOLVIDO_CORRECAO { background: #fff8e1; color: #b7791f; }
+    .badge-APROVADO { background: #f0f9eb; color: #67c23a; }
+    .badge-REJEITADO { background: #fef0f0; color: #f56c6c; }
+    
+    .btn-action {
+        padding: 6px 12px;
+        border-radius: 4px;
+        text-decoration: none;
+        font-weight: 600;
+        font-size: 0.85rem;
+        display: inline-flex;
+        gap: 5px;
+        align-items: center;
+        transition: opacity 0.2s;
+        white-space: nowrap;
+    }
+    .btn-action:hover { opacity: 0.85; }
+    .btn-approve { background: #67c23a; color: white; }
+    .btn-reject { background: #f56c6c; color: white; }
+    .btn-view { background: #f4f4f5; color: #606266; border: 1px solid #dcdfe6; }
+    .filter-panel {
+        background: white;
+        border: 1px solid #e8edf2;
+        border-radius: 8px;
+        padding: 18px;
+        margin-bottom: 24px;
+        box-shadow: var(--card-shadow);
+    }
+    .filter-grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(170px, 1fr));
+        gap: 14px;
+        align-items: end;
+    }
+    .filter-field label {
+        display: block;
+        font-size: 0.78rem;
+        font-weight: 700;
+        color: #596275;
+        margin-bottom: 5px;
+    }
+    .filter-field input,
+    .filter-field select {
+        width: 100%;
+        border: 1px solid #dfe4ea;
+        border-radius: 6px;
+        padding: 9px 10px;
+        color: var(--text-color);
+        background: white;
+    }
+    .filter-actions {
+        display: flex;
+        gap: 8px;
+        flex-wrap: wrap;
+        grid-column: 1 / -1;
+        justify-content: flex-end;
+        padding-top: 2px;
+    }
+    .filter-actions button,
+    .filter-actions a {
+        min-height: 38px;
+        border-radius: 6px;
+        padding: 9px 14px;
+        font-weight: 700;
+        text-decoration: none;
+        border: 1px solid var(--if-green);
+        cursor: pointer;
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        gap: 6px;
+    }
+    .filter-actions button {
+        background: var(--if-green);
+        color: white;
+    }
+    .filter-actions a {
+        color: #596275;
+        border-color: #dfe4ea;
+        background: #f8fafc;
+    }
+    .table-wrap {
+        width: 100%;
+        max-width: 100%;
+        overflow: hidden;
+    }
+    .request-actions {
+        display: flex;
+        gap: 8px;
+        flex-wrap: wrap;
+        align-items: center;
+    }
+    .request-actions form {
+        margin: 0;
+    }
+    .list-header {
+        display: flex;
+        justify-content: flex-end;
+        margin-bottom: 14px;
+    }
+    @media (max-width: 1100px) {
+        .propose-table th:nth-child(3),
+        .propose-table td:nth-child(3) {
+            display: none;
+        }
+        .propose-table th:nth-child(6), .propose-table td:nth-child(6) {
+            width: 220px;
+        }
+        .btn-action {
+            padding: 6px 9px;
+            font-size: 0.8rem;
+        }
+    }
+    @media (max-width: 760px) {
+        .filter-grid {
+            grid-template-columns: 1fr;
+        }
+        .filter-actions {
+            justify-content: stretch;
+        }
+        .filter-actions button,
+        .filter-actions a {
+            flex: 1 1 120px;
+        }
+        .propose-table,
+        .propose-table thead,
+        .propose-table tbody,
+        .propose-table tr,
+        .propose-table th,
+        .propose-table td {
+            display: block;
+            width: 100% !important;
+        }
+        .propose-table {
+            background: transparent;
+            box-shadow: none;
+            border-radius: 0;
+        }
+        .propose-table thead {
+            display: none;
+        }
+        .propose-table tr {
+            background: white;
+            border-radius: 8px;
+            box-shadow: var(--card-shadow);
+            margin-bottom: 14px;
+            overflow: hidden;
+        }
+        .propose-table td {
+            border-bottom: 1px solid #f1f2f6;
+            padding: 10px 14px;
+        }
+        .propose-table td::before {
+            content: attr(data-label);
+            display: block;
+            font-size: 0.72rem;
+            font-weight: 700;
+            color: #95a5a6;
+            text-transform: uppercase;
+            margin-bottom: 4px;
+        }
+        .cell-truncate {
+            white-space: normal;
+            overflow-wrap: anywhere;
+        }
+        .request-actions {
+            align-items: stretch;
+        }
+        .request-actions .btn-action {
+            justify-content: center;
+            flex: 1 1 130px;
+        }
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="animate-fade">
+    <div class="list-header">
+        <a href="{% url 'solicitacao_create_select' %}" class="btn-primary">
+            <i class="fa-solid fa-plus"></i> Nova Solicitacao
+        </a>
+    </div>
+    <form method="get" class="filter-panel">
+        <div class="filter-grid">
+            <div class="filter-field">
+                <label for="filter-q">Busca</label>
+                <input id="filter-q" type="search" name="q" value="{{ request.GET.q }}" placeholder="ID, campus, solicitante ou justificativa">
+            </div>
+            <div class="filter-field">
+                <label for="filter-status">Status</label>
+                <select id="filter-status" name="status">
+                    <option value="">Todos</option>
+                    <option value="RASCUNHO" {% if request.GET.status == 'RASCUNHO' %}selected{% endif %}>Rascunho</option>
+                    <option value="EM_ANALISE" {% if request.GET.status == 'EM_ANALISE' %}selected{% endif %}>Em analise</option>
+                    <option value="ENVIADO_CONSUP" {% if request.GET.status == 'ENVIADO_CONSUP' %}selected{% endif %}>Enviado ao CONSUP</option>
+                    <option value="DEVOLVIDO_CORRECAO" {% if request.GET.status == 'DEVOLVIDO_CORRECAO' %}selected{% endif %}>Devolvido para correcao</option>
+                    <option value="APROVADO" {% if request.GET.status == 'APROVADO' %}selected{% endif %}>Aprovado</option>
+                    <option value="REJEITADO" {% if request.GET.status == 'REJEITADO' %}selected{% endif %}>Rejeitado</option>
+                </select>
+            </div>
+            <div class="filter-field">
+                <label for="filter-campus">Campus</label>
+                <select id="filter-campus" name="campus">
+                    <option value="">Todos</option>
+                    {% for campus in campus_options %}
+                    <option value="{{ campus.id }}" {% if request.GET.campus == campus.id|stringformat:"s" %}selected{% endif %}>{{ campus.sigla }} - {{ campus.nome }}</option>
+                    {% endfor %}
+                </select>
+            </div>
+            {% if user.is_superuser or user.is_staff %}
+            <div class="filter-field">
+                <label for="filter-solicitante">Solicitante</label>
+                <select id="filter-solicitante" name="solicitante">
+                    <option value="">Todos</option>
+                    {% for solicitante in solicitante_options %}
+                    <option value="{{ solicitante.id }}" {% if request.GET.solicitante == solicitante.id|stringformat:"s" %}selected{% endif %}>{{ solicitante.username }}</option>
+                    {% endfor %}
+                </select>
+            </div>
+            {% endif %}
+            <div class="filter-field">
+                <label for="filter-data-inicio">Data inicial</label>
+                <input id="filter-data-inicio" type="date" name="data_inicio" value="{{ request.GET.data_inicio }}">
+            </div>
+            <div class="filter-field">
+                <label for="filter-data-fim">Data final</label>
+                <input id="filter-data-fim" type="date" name="data_fim" value="{{ request.GET.data_fim }}">
+            </div>
+            <div class="filter-field">
+                <label for="filter-proposta">Proposta</label>
+                <select id="filter-proposta" name="proposta">
+                    <option value="">Todas</option>
+                    <option value="com_resolucao" {% if request.GET.proposta == 'com_resolucao' %}selected{% endif %}>Com resolucao</option>
+                    <option value="sem_resolucao" {% if request.GET.proposta == 'sem_resolucao' %}selected{% endif %}>Sem resolucao</option>
+                    <option value="resolucao_diferente" {% if request.GET.proposta == 'resolucao_diferente' %}selected{% endif %}>Resolucao diferente</option>
+                </select>
+            </div>
+            <div class="filter-field">
+                <label for="filter-ordenar">Ordenar</label>
+                <select id="filter-ordenar" name="ordenar">
+                    <option value="">Mais recentes</option>
+                    <option value="antigas" {% if request.GET.ordenar == 'antigas' %}selected{% endif %}>Mais antigas</option>
+                    <option value="campus" {% if request.GET.ordenar == 'campus' %}selected{% endif %}>Campus</option>
+                    <option value="status" {% if request.GET.ordenar == 'status' %}selected{% endif %}>Status</option>
+                </select>
+            </div>
+            <div class="filter-actions">
+                <button type="submit"><i class="fa-solid fa-filter"></i> Filtrar</button>
+                <a href="{% url 'solicitacao_list' %}">Limpar</a>
+            </div>
+        </div>
+    </form>
+
+    {% if solicitacoes %}
+    <div class="table-wrap">
+    <table class="propose-table">
+        <thead>
+            <tr>
+                <th>ID</th>
+                <th>Campus</th>
+                <th>Solicitante</th>
+                <th>Justificativa</th>
+                <th>Status</th>
+                <th>Ações</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for req in solicitacoes %}
+            <tr>
+                <td data-label="ID">#{{ req.id }}</td>
+                <td data-label="Campus"><strong>{{ req.organograma_original.campus.sigla }}</strong></td>
+                <td data-label="Solicitante" class="cell-truncate">{{ req.usuario.username }}</td>
+                <td data-label="Justificativa" class="justification-cell" title="{{ req.justificativa }}">
+                    {{ req.justificativa }}
+                </td>
+                <td data-label="Status">
+                    <span class="badge badge-{{ req.status }}">
+                        {{ req.get_status_display }}
+                    </span>
+                </td>
+                <td data-label="Ações">
+                    <div class="request-actions">
+                        <a href="{% url 'solicitacao_detail' req.id %}?next={{ request.get_full_path|urlencode }}" class="btn-action btn-view" style="background: #e1f3d8; color: #67c23a; border-color: #c2e7b0;" title="Ver Comparativo">
+                            <i class="fa-solid fa-code-compare"></i> Comparar
+                        </a>
+                        {% if req.status == 'RASCUNHO' or req.status == 'DEVOLVIDO_CORRECAO' or user.is_superuser and req.status == 'ENVIADO_CONSUP' or user.is_superuser and req.status == 'ENVIADO_CONSUP' or user.is_staff and req.status == 'ENVIADO_CONSUP' %}
+                        <a href="{% url 'organograma_edit' req.organograma_proposto.pk %}?next={{ request.get_full_path|urlencode }}" class="btn-action btn-view" title="Editar resolução e regimentos da proposta">
+                            <i class="fa-solid fa-file-pen"></i> Metadados
+                        </a>
+                        {% endif %}
+                        {% if req.status == 'RASCUNHO' or req.status == 'DEVOLVIDO_CORRECAO' %}
+                        <a href="{% url 'organograma_build' req.organograma_proposto.pk %}?next={{ request.get_full_path|urlencode }}" class="btn-action btn-view" title="Ver ou Editar Proposta">
+                            <i class="fa-solid fa-pen-ruler"></i> Ajustar
+                        </a>
+                        <form method="post" action="{% url 'solicitacao_resubmit' req.id %}" onsubmit="return confirm('Enviar esta proposta para analise? Depois disso ela ficara bloqueada ate avaliacao ou devolucao.');">
+                            {% csrf_token %}
+                            <input type="hidden" name="next" value="{{ request.get_full_path }}">
+                            <button type="submit" class="btn-action btn-approve" style="border:none; cursor:pointer;"><i class="fa-solid fa-paper-plane"></i> Enviar Analise</button>
+                        </form>
+                        {% if user.is_superuser or req.usuario == user %}
+                        <form method="post" action="{% url 'solicitacao_delete' req.id %}" style="display:inline;" onsubmit="return confirm('Deseja realmente excluir este rascunho de proposta? Esta ação não pode ser desfeita.');">
+                            {% csrf_token %}
+                            <input type="hidden" name="next" value="{{ request.get_full_path }}">
+                            <button type="submit" class="btn-action btn-reject" style="border:none; cursor:pointer;" title="Excluir Rascunho"><i class="fa-solid fa-trash"></i> Excluir</button>
+                        </form>
+                        {% endif %}
+                        {% endif %}
+
+                        {% if user.is_superuser and req.status == 'EM_ANALISE' or user.is_staff and req.status == 'EM_ANALISE' %}
+                        <form method="post" action="{% url 'solicitacao_approve' req.id %}" onsubmit="return confirm('Enviar esta proposta para aprovacao no CONSUP? O organograma vigente continuara oficial.');">
+                            {% csrf_token %}
+                            <input type="hidden" name="next" value="{{ request.get_full_path }}">
+                            <button type="submit" class="btn-action btn-approve" style="border:none; cursor:pointer;"><i class="fa-solid fa-paper-plane"></i> Enviar CONSUP</button>
+                        </form>
+                        {% elif user.is_superuser and req.status == 'ENVIADO_CONSUP' or user.is_staff and req.status == 'ENVIADO_CONSUP' %}
+                        <form method="post" action="{% url 'solicitacao_approve' req.id %}" onsubmit="return confirm('Registrar aprovacao final do CONSUP? A proposta precisa ter uma nova resolucao da estrutura selecionada.');">
+                            {% csrf_token %}
+                            <input type="hidden" name="next" value="{{ request.get_full_path }}">
+                            <button type="submit" class="btn-action btn-approve" style="border:none; cursor:pointer;"><i class="fa-solid fa-check"></i> Aprovar Final</button>
+                        </form>
+                        {% endif %}
+                        {% if user.is_superuser and req.status == 'EM_ANALISE' or user.is_staff and req.status == 'EM_ANALISE' or user.is_superuser and req.status == 'ENVIADO_CONSUP' or user.is_staff and req.status == 'ENVIADO_CONSUP' %}
+                        <form method="post" action="{% url 'solicitacao_reject' req.id %}" data-rejection-form>
+                            {% csrf_token %}
+                            <input type="hidden" name="next" value="{{ request.get_full_path }}">
+                            <input type="hidden" name="justificativa_avaliador" data-rejection-justification>
+                            <input type="hidden" name="acao_rejeicao" data-rejection-action-input>
+                            <button type="button" data-rejection-action="devolver_correcao" data-rejection-label="Devolver para Correção" class="btn-action" style="border:none; cursor:pointer; background-color: #f39c12; color: white;"><i class="fa-solid fa-rotate-left"></i> Devolver</button>
+                            <button type="button" data-rejection-action="rejeitar" data-rejection-label="Rejeitar Definitivamente" class="btn-action btn-reject" style="border:none; cursor:pointer;"><i class="fa-solid fa-xmark"></i> Rejeitar</button>
+                        </form>
+                        {% endif %}
+                        {% comment %}
+                        <form method="post" action="{% url 'solicitacao_approve' req.id %}" onsubmit="return confirm('Confirmar a aprovação? O organograma atual será desativado e substituído por esta proposta.');">
+                            {% csrf_token %}
+                            <input type="hidden" name="next" value="{{ request.get_full_path }}">
+                            <button type="submit" class="btn-action btn-approve" style="border:none; cursor:pointer;"><i class="fa-solid fa-check"></i> Aprovar</button>
+                        </form>
+                        <form method="post" action="{% url 'solicitacao_reject' req.id %}" onsubmit="return confirm('Confirmar rejeição da proposta?');">
+                            {% csrf_token %}
+                            <input type="hidden" name="next" value="{{ request.get_full_path }}">
+                            <button type="submit" class="btn-action btn-reject" style="border:none; cursor:pointer;"><i class="fa-solid fa-xmark"></i> Rejeitar</button>
+                        </form>
+                        {% endcomment %}
+                    </div>
+                </td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+    </div>
+    {% else %}
+    <div style="text-align: center; color: #bdc3c7; padding: 40px;">
+        <i class="fa-regular fa-folder-open" style="font-size: 3rem; margin-bottom: 10px;"></i>
+        <p>Ainda não há solicitações registradas.</p>
+    </div>
+    {% endif %}
+</div>
+<script>
+async function openEvaluatorJustificationPopup(form, action, label) {
+    const title = label || 'Registrar decisão';
+    let justification = '';
+    if (window.Swal) {
+        const result = await Swal.fire({
+            title,
+            input: 'textarea',
+            inputLabel: 'Justificativa do avaliador',
+            inputPlaceholder: 'Informe a justificativa que será exibida ao demandante.',
+            inputAttributes: { 'aria-label': 'Justificativa do avaliador' },
+            showCancelButton: true,
+            confirmButtonText: 'Confirmar',
+            cancelButtonText: 'Cancelar',
+            confirmButtonColor: action === 'rejeitar' ? '#e74c3c' : '#f39c12',
+            inputValidator: (value) => {
+                if (!value || !value.trim()) {
+                    return 'Informe a justificativa do avaliador.';
+                }
+            }
+        });
+        if (!result.isConfirmed) return;
+        justification = result.value.trim();
+    } else {
+        const value = window.prompt('Justificativa do avaliador');
+        if (!value || !value.trim()) return;
+        justification = value.trim();
+    }
+
+    form.querySelector('[data-rejection-justification]').value = justification;
+    form.querySelector('[data-rejection-action-input]').value = action;
+    form.submit();
+}
+
+document.addEventListener('click', (event) => {
+    const button = event.target.closest('[data-rejection-action]');
+    if (!button) return;
+    const form = button.closest('[data-rejection-form]');
+    if (!form) return;
+    openEvaluatorJustificationPopup(
+        form,
+        button.dataset.rejectionAction,
+        button.dataset.rejectionLabel
+    );
+});
+</script>
+{% endblock %}

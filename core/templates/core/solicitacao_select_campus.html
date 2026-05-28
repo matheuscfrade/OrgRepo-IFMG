@@ -1,0 +1,78 @@
+{% extends 'base.html' %}
+
+{% block title %}Nova Solicitacao | IFMG OrgRepo{% endblock %}
+{% block page_title %}Nova Solicitacao de Alteracao{% endblock %}
+
+{% block extra_css %}
+<style>
+    .form-container {
+        max-width: 620px;
+        margin: 0 auto;
+        background: white;
+        padding: 30px;
+        border-radius: 8px;
+        box-shadow: var(--card-shadow);
+        border-top: 4px solid #f39c12;
+    }
+    .form-field label {
+        display: block;
+        font-weight: 700;
+        color: var(--text-color);
+        margin-bottom: 8px;
+    }
+    .form-field select {
+        width: 100%;
+        padding: 11px 12px;
+        border: 1px solid #dfe4ea;
+        border-radius: 6px;
+        color: var(--text-color);
+        background: white;
+    }
+    .form-actions {
+        display: flex;
+        justify-content: flex-end;
+        gap: 12px;
+        margin-top: 26px;
+        padding-top: 18px;
+        border-top: 1px solid #f1f2f6;
+    }
+    .btn-secondary {
+        padding: 10px 18px;
+        background: #f1f2f6;
+        color: var(--sidebar-text);
+        border-radius: 6px;
+        text-decoration: none;
+        font-weight: 700;
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="animate-fade">
+    <div class="form-container">
+        <h2 style="margin-bottom: 6px; color: #d35400;">Nova Solicitacao</h2>
+        <p style="color: #7f8c8d; font-size: 0.9rem; margin-bottom: 24px;">
+            Selecione o campus cujo organograma oficial sera usado como base da proposta.
+        </p>
+
+        <form method="post">
+            {% csrf_token %}
+            <div class="form-field">
+                <label for="id_campus">Campus</label>
+                <select id="id_campus" name="campus" required>
+                    <option value="">Selecione...</option>
+                    {% for campus in campus_options %}
+                    <option value="{{ campus.id }}">{{ campus.sigla }} - {{ campus.nome }}</option>
+                    {% endfor %}
+                </select>
+            </div>
+            <div class="form-actions">
+                <a href="{% url 'solicitacao_list' %}" class="btn-secondary">Cancelar</a>
+                <button type="submit" class="btn-primary">
+                    <i class="fa-solid fa-arrow-right"></i> Continuar
+                </button>
+            </div>
+        </form>
+    </div>
+</div>
+{% endblock %}
