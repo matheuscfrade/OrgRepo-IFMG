@@ -11,13 +11,16 @@ The loader is **resilient**: it will import as many objects as possible
 even if some records conflict (unique constraints, duplicate Users/Profiles, etc.).
 At the end it prints a summary of what was loaded vs skipped.
 
+Use --only-oficial to keep **only the official organogramas** (status=OFICIAL)
+and automatically remove test/draft data (RASCUNHO, PROPOSTA, etc.).
+
 By default it loads data/full_data.json (if present in the repo)
 and automatically copies any PDFs/media from data/media/ into var/media/.
 
 Usage examples:
     python manage.py load_full_data
-    python manage.py load_full_data --file my_backup.json
-    python manage.py load_full_data --no-media
+    python manage.py load_full_data --only-oficial
+    python manage.py load_full_data --file my_backup.json --only-oficial --no-media
 """
 
 import os
@@ -31,7 +34,8 @@ from django.core.management.base import BaseCommand
 class Command(BaseCommand):
     help = (
         "Load a full data fixture (best-effort / resilient mode). "
-        "Imports as many objects as possible even when there are conflicts. "
+        "Use --only-oficial to import ONLY the official organogramas (status=OFICIAL) "
+        "and automatically clean test/draft data. "
         "Defaults to data/full_data.json + copies PDFs from data/media/."
     )
 
@@ -45,6 +49,11 @@ class Command(BaseCommand):
             "--no-media",
             action="store_true",
             help="Skip copying media/PDF files from data/media/",
+        )
+        parser.add_argument(
+            "--only-oficial",
+            action="store_true",
+            help="Import ONLY official organogramas (status=OFICIAL) and clean test/draft data from the fixture.",
         )
 
     def handle(self, *args, **options):
@@ -98,6 +107,22 @@ class Command(BaseCommand):
         for deserialized_obj in serializers.deserialize(
             "json", StringIO(fixture_content), ignorenonexistent=True
         ):
+            obj = deserialized_obj.object
+            model_label = obj._meta.label
+
+            # --only-oficial: keep only real approved organogramas and clean test data
+            if options.get("only_oficial"):
+                if model_label == "core.organograma":
+                    if getattr(obj, "status", None) != "OFICIAL":
+                        skipped += 1
+                        continue  # skip drafts, propostas, etc.
+
+                # Clean obvious test/draft solicitações
+                if model_label == "core.solicitacaoalteracao":
+                    if getattr(obj, "status", None) in ("RASCUNHO", "DEVOLVIDO_CORRECAO"):
+                        skipped += 1
+                        continue
+
             try:
                 deserialized_obj.save()
                 loaded += 1
@@ -105,11 +130,11 @@ class Command(BaseCommand):
                 skipped += 1
                 if options.get("verbosity", 1) >= 2:
                     self.stdout.write(
-                        self.style.WARNING(f"  Skipped {deserialized_obj.object._meta.label}: {e}")
+                        self.style.WARNING(f"  Skipped {model_label}: {e}")
                     )
             except Exception as e:
                 errors += 1
-                self.stdout.write(self.style.ERROR(f"  Error on {deserialized_obj.object._meta.label}: {e}"))
+                self.stdout.write(self.style.ERROR(f"  Error on {model_label}: {e}"))
 
         # Summary
         self.stdout.write("")
@@ -132,13 +157,21 @@ class Command(BaseCommand):
         if not options.get("no_media"):
             self._copy_media_files()
 
-        self.stdout.write(
-            self.style.WARNING(
-                "Note: If reference models (Modelos Referenciais, Cargos, etc.) were overwritten, "
-                "you may want to run:\n"
-                "    python manage.py load_consup44_modelos"
+        if options.get("only_oficial"):
+            self.stdout.write(
+                self.style.SUCCESS(
+                    "\n--only-oficial mode used: Only OFICIAL organogramas were imported. "
+                    "Test/draft data was cleaned from the fixture."
+                )
             )
-        )
+        else:
+            self.stdout.write(
+                self.style.WARNING(
+                    "Note: If reference models (Modelos Referenciais, Cargos, etc.) were overwritten, "
+                    "you may want to run:\n"
+                    "    python manage.py load_consup44_modelos"
+                )
+            )
 
     def _copy_media_files(self):
         src = settings.BASE_DIR / "data" / "media"
