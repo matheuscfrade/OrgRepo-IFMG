@@ -3,11 +3,16 @@ from .base import *
 DEBUG = True
 ALLOWED_HOSTS = ['localhost', '127.0.0.1']
 
+# Ensure required directories exist (important after fresh clone)
+var_dir = BASE_DIR / 'var'
+var_dir.mkdir(exist_ok=True)
+(var_dir / 'media').mkdir(exist_ok=True)
+
 # Use SQLite by default for development
 DATABASES = {
     'default': {
         'ENGINE': 'django.db.backends.sqlite3',
-        'NAME': BASE_DIR / 'var' / 'db.sqlite3',
+        'NAME': var_dir / 'db.sqlite3',
     }
 }
 
