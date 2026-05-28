@@ -84,18 +84,18 @@ Acesse o sistema em: [http://127.0.0.1:8000/admin/](http://127.0.0.1:8000/admin/
 **Para carregar dados completos** (organogramas reais, regimentos, resoluções etc. em vez da fundação limpa):
 
 ```bash
-python manage.py load_full_data --file full_data.json
+python manage.py load_full_data
 ```
 
-(Gere o arquivo com `python manage.py dump_full_data --output full_data.json` a partir de um banco com todos os dados.)
+(O arquivo `data/full_data.json` + os PDFs já vêm incluídos no repositório em `data/`)
 
 ## Comandos Úteis
 
 | Comando | Descrição |
 |---------|-----------|
 | `python manage.py load_consup44_modelos` | Carrega a fundação (Modelos Referenciais + Campi básicos) |
-| `python manage.py dump_full_data --output full_data.json` | Gera um dump completo dos dados (para backup ou compartilhamento) |
-| `python manage.py load_full_data --file full_data.json` | Restaura um dump completo de dados |
+| `python manage.py load_full_data` | Carrega os dados completos (organogramas reais etc.) que já vêm no repositório |
+| `python manage.py dump_full_data --output data/full_data.json` | Gera um novo dump completo (caso você tenha mais dados) |
 | `python manage.py purge_instance_data --github-minimal --force` | Remove todos os dados de campi e organogramas (deixa apenas a fundação 44) |
 
 ## Fluxo de Desenvolvimento Recomendado (Para Forks e Contribuidores)
