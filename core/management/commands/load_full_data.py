@@ -7,6 +7,10 @@ This is useful when you want to restore a complete previous state
 (all Campi + real Organogramas + Regimentos + Resoluções, etc.)
 on top of the clean foundation.
 
+The loader is **resilient**: it will import as many objects as possible
+even if some records conflict (unique constraints, duplicate Users/Profiles, etc.).
+At the end it prints a summary of what was loaded vs skipped.
+
 By default it loads data/full_data.json (if present in the repo)
 and automatically copies any PDFs/media from data/media/ into var/media/.
 
@@ -22,13 +26,12 @@ from pathlib import Path
 
 from django.conf import settings
 from django.core.management.base import BaseCommand
-from django.core.management import call_command
-from django.db import transaction
 
 
 class Command(BaseCommand):
     help = (
-        "Load a full data fixture (previously generated with dump_full_data). "
+        "Load a full data fixture (best-effort / resilient mode). "
+        "Imports as many objects as possible even when there are conflicts. "
         "Defaults to data/full_data.json + copies PDFs from data/media/."
     )
 
@@ -77,23 +80,53 @@ class Command(BaseCommand):
             with open(fixture_path, encoding="latin-1") as f:
                 fixture_content = f.read()
 
-        # We write to a temp UTF-8 file because loaddata has issues when
-        # passed StringIO objects directly (it misinterprets them as format names).
-        import tempfile
+        # Resilient object-by-object loading.
+        # This allows the command to succeed even when the historical fixture
+        # contains duplicates or conflicts with existing data (e.g. CargoFuncao,
+        # User + Profile relationships, etc.).
+        from io import StringIO
+        from django.core import serializers
+        from django.db import IntegrityError
+        from django.core.exceptions import ValidationError
 
-        with tempfile.NamedTemporaryFile(
-            mode="w", encoding="utf-8", suffix=".json", delete=False
-        ) as tmp:
-            tmp.write(fixture_content)
-            tmp_path = tmp.name
+        loaded = 0
+        skipped = 0
+        errors = 0
 
-        try:
-            with transaction.atomic():
-                call_command("loaddata", tmp_path, verbosity=1)
-        finally:
-            os.unlink(tmp_path)
+        self.stdout.write("Importing objects (best-effort mode)...")
 
-        self.stdout.write(self.style.SUCCESS("Full data loaded successfully."))
+        for deserialized_obj in serializers.deserialize(
+            "json", StringIO(fixture_content), ignorenonexistent=True
+        ):
+            try:
+                deserialized_obj.save()
+                loaded += 1
+            except (IntegrityError, ValidationError) as e:
+                skipped += 1
+                if options.get("verbosity", 1) >= 2:
+                    self.stdout.write(
+                        self.style.WARNING(f"  Skipped {deserialized_obj.object._meta.label}: {e}")
+                    )
+            except Exception as e:
+                errors += 1
+                self.stdout.write(self.style.ERROR(f"  Error on {deserialized_obj.object._meta.label}: {e}"))
+
+        # Summary
+        self.stdout.write("")
+        self.stdout.write(self.style.SUCCESS(f"Import finished."))
+        self.stdout.write(f"  Loaded:   {loaded}")
+        self.stdout.write(f"  Skipped (conflicts/duplicates): {skipped}")
+        if errors:
+            self.stdout.write(self.style.WARNING(f"  Errors:   {errors}"))
+
+        if loaded == 0 and skipped > 0:
+            self.stdout.write(
+                self.style.WARNING(
+                    "\nNo objects were loaded because of conflicts.\n"
+                    "This usually happens when foundation data (Cargos, Profiles, etc.) "
+                    "already exists. Try on a fresh database after 'migrate' only."
+                )
+            )
 
         # Copy media files (PDFs of regimentos, resoluções, etc.)
         if not options.get("no_media"):
