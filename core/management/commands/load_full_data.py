@@ -12,7 +12,7 @@ even if some records conflict (unique constraints, duplicate Users/Profiles, etc
 At the end it prints a summary of what was loaded vs skipped.
 
 Use --only-oficial to keep **only the official organogramas** (status=OFICIAL)
-and automatically remove test/draft data (RASCUNHO, PROPOSTA, etc.).
+and automatically remove test/draft data (RASCUNHO, PROPOSTA, test regimentos, etc.).
 
 By default it loads data/full_data.json (if present in the repo)
 and automatically copies any PDFs/media from data/media/ into var/media/.
@@ -35,7 +35,7 @@ class Command(BaseCommand):
     help = (
         "Load a full data fixture (best-effort / resilient mode). "
         "Use --only-oficial to import ONLY the official organogramas (status=OFICIAL) "
-        "and automatically clean test/draft data. "
+        "and automatically clean test/draft data (including regimentos named 'test'). "
         "Defaults to data/full_data.json + copies PDFs from data/media/."
     )
 
@@ -53,7 +53,7 @@ class Command(BaseCommand):
         parser.add_argument(
             "--only-oficial",
             action="store_true",
-            help="Import ONLY official organogramas (status=OFICIAL) and clean test/draft data from the fixture.",
+            help="Import ONLY official organogramas (status=OFICIAL) and clean test/draft data (including regimentos named 'test').",
         )
 
     def handle(self, *args, **options):
@@ -123,6 +123,13 @@ class Command(BaseCommand):
                         skipped += 1
                         continue
 
+                # Remove test regimentos (e.g. one named "test")
+                if model_label == "core.regimentocampus":
+                    nome = (getattr(obj, "nome", "") or "").lower()
+                    if "test" in nome:
+                        skipped += 1
+                        continue
+
             try:
                 deserialized_obj.save()
                 loaded += 1
@@ -161,7 +168,7 @@ class Command(BaseCommand):
             self.stdout.write(
                 self.style.SUCCESS(
                     "\n--only-oficial mode used: Only OFICIAL organogramas were imported. "
-                    "Test/draft data was cleaned from the fixture."
+                    "Test/draft data (including test regimentos) was cleaned from the fixture."
                 )
             )
         else:
