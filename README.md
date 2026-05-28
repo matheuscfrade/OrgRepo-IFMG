@@ -5,6 +5,23 @@
 
 Sistema para gerenciamento de estruturas organizacionais (organogramas), modelos referenciais, solicitações de alteração e governança conforme a Resolução CONSUP nº 44/2025.
 
+## ⚠️ Configurações em Camadas (Importante para Windows)
+
+Este projeto utiliza **configurações em camadas** (development / production).
+
+Se você receber o erro `No module named 'config.development'` ao rodar comandos no Windows, execute definindo a variável de ambiente:
+
+```powershell
+$env:DJANGO_SETTINGS_MODULE = "config.settings.development"
+
+# Exemplos de uso:
+python manage.py migrate
+python manage.py load_consup44_modelos
+python manage.py runserver
+```
+
+Veja o guia completo com mais detalhes em [docs/setup.md](docs/setup.md).
+
 ## Objetivo
 
 Este sistema foi desenvolvido para o Instituto Federal de Minas Gerais (IFMG) com o propósito de:
@@ -35,7 +52,7 @@ Este repositório está configurado para conter **apenas a fundação normativa*
 python -m venv .venv
 
 # Windows
-.\.venv\Scripts\activate
+.\ .venv\Scripts\activate
 
 # Instale as dependências
 pip install -r requirements.txt
@@ -48,7 +65,7 @@ python manage.py migrate
 python manage.py load_consup44_modelos
 ```
 
-Este comando cria toda a estrutura normativa da Resolução CONSUP 44/2025.
+Este comando cria toda a estrutura normativa da Resolução CONSUP 44/2025 (incluindo a lista básica de Campi).
 
 ### 3. Crie um Superusuário
 
@@ -56,14 +73,41 @@ Este comando cria toda a estrutura normativa da Resolução CONSUP 44/2025.
 python manage.py createsuperuser
 ```
 
-Acesse o admin em `/admin/` para começar a cadastrar Campi, Regimentos, Resoluções e Organogramas.
+### 4. Rode o Servidor
+
+```bash
+python manage.py runserver
+```
+
+Acesse o sistema em: [http://127.0.0.1:8000/admin/](http://127.0.0.1:8000/admin/)
+
+**Para carregar dados completos** (organogramas reais, regimentos, resoluções etc. em vez da fundação limpa):
+
+```bash
+python manage.py load_full_data --file full_data.json
+```
+
+(Gere o arquivo com `python manage.py dump_full_data --output full_data.json` a partir de um banco com todos os dados.)
 
 ## Comandos Úteis
 
 | Comando | Descrição |
 |---------|-----------|
-| `python manage.py load_consup44_modelos` | Carrega/recarrega os modelos referenciais da Resolução 44 |
+| `python manage.py load_consup44_modelos` | Carrega a fundação (Modelos Referenciais + Campi básicos) |
+| `python manage.py dump_full_data --output full_data.json` | Gera um dump completo dos dados (para backup ou compartilhamento) |
+| `python manage.py load_full_data --file full_data.json` | Restaura um dump completo de dados |
 | `python manage.py purge_instance_data --github-minimal --force` | Remove todos os dados de campi e organogramas (deixa apenas a fundação 44) |
+
+## Fluxo de Desenvolvimento Recomendado (Para Forks e Contribuidores)
+
+- O **estado padrão** do projeto após clonar deve ser a **fundação limpa** (Resolução 44 + Campi básicos).
+- Use `python manage.py load_consup44_modelos` para restaurar a fundação.
+- Se precisar trabalhar com dados completos (organogramas reais, regimentos, etc.), use `load_full_data`.
+- Siga o estilo de código existente.
+- Atualize a documentação quando necessário.
+- Abra Pull Requests para contribuir.
+
+Obrigado por contribuir!
 
 ## Arquitetura Técnica
 
