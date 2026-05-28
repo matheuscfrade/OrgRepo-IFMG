@@ -43,7 +43,7 @@ class Command(BaseCommand):
         )
 
     def handle(self, *args, **options):
-        dry_run = options["dry_run" or not options["force"]]
+        dry_run = options["dry_run"] or not options["force"]
 
         if dry_run:
             self.stdout.write(self.style.WARNING("=== DRY RUN MODE - No changes will be made ==="))
