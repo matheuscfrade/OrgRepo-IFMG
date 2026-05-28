@@ -10,9 +10,16 @@ Aggressively cleans a full_data.json fixture:
 - Removes Units, Solicitações, and other objects linked to removed data
 
 This produces a clean fixture suitable for distribution.
+
+Easy in-place usage (recommended):
+    python manage.py clean_full_data --force
+
+With explicit paths:
+    python manage.py clean_full_data --input data/full_data.json --output data/full_data_clean.json
 """
 
 import json
+import os
 from pathlib import Path
 
 from django.core.management.base import BaseCommand
@@ -20,9 +27,9 @@ from django.core.management.base import BaseCommand
 
 class Command(BaseCommand):
     help = (
-        "Aggressively clean a full_data.json fixture: "
-        "remove test Campi, non-OFICIAL organogramas, non-vigente regimentos, "
-        "test regimentos, and all related draft/test data."
+        "Aggressively clean a full_data.json fixture (removes test Campi, non-OFICIAL organogramas, "
+        "non-vigente regimentos, test regimentos, etc.). "
+        "Use --force for in-place cleaning of data/full_data.json."
     )
 
     def add_arguments(self, parser):
@@ -33,13 +40,13 @@ class Command(BaseCommand):
         )
         parser.add_argument(
             "--output",
-            default="data/full_data.json",
-            help="Path to write the cleaned fixture (can be same as input with --force)",
+            default=None,
+            help="Path to write the cleaned fixture. If not provided, cleans in-place (requires --force).",
         )
         parser.add_argument(
             "--force",
             action="store_true",
-            help="Overwrite output file without asking",
+            help="Allow overwriting the file in-place (required for in-place cleaning).",
         )
         parser.add_argument(
             "--dry-run",
@@ -49,8 +56,9 @@ class Command(BaseCommand):
 
     def handle(self, *args, **options):
         input_path = Path(options["input"])
-        output_path = Path(options["output"])
+        output_path = Path(options["output"]) if options["output"] else input_path
         dry_run = options["dry_run"]
+        in_place = input_path == output_path
 
         if not input_path.exists():
             self.stdout.write(self.style.ERROR(f"Input file not found: {input_path}"))
@@ -226,8 +234,28 @@ class Command(BaseCommand):
             self.stdout.write(self.style.WARNING("\nDry-run mode — no file was written."))
             return
 
+        # Safety checks for in-place modification
+        if in_place:
+            if not options["force"]:
+                self.stdout.write(self.style.ERROR(
+                    "\n!!! DANGER: You are about to overwrite the input file in-place !!!\n"
+                    "This will permanently modify your fixture.\n\n"
+                    "To proceed, run again with the --force flag:\n"
+                    f"    python manage.py clean_full_data --input {input_path} --force\n"
+                ))
+                return
+
+            self.stdout.write(self.style.WARNING(
+                "\n" + "="*70 + "\n"
+                "WARNING: Performing IN-PLACE cleaning of the fixture!\n"
+                f"File: {input_path}\n"
+                "This operation will permanently delete test/draft data from the file.\n"
+                "Make sure you have a backup if needed.\n"
+                "="*70 + "\n"
+            ))
+
         # Write output
-        if output_path.exists() and not options["force"]:
+        if output_path.exists() and output_path != input_path and not options["force"]:
             self.stdout.write(
                 self.style.ERROR(
                     f"Output file already exists: {output_path}\n"
@@ -241,12 +269,19 @@ class Command(BaseCommand):
         with open(output_path, "w", encoding="utf-8") as f:
             json.dump(cleaned, f, indent=2, ensure_ascii=False)
 
-        self.stdout.write(
-            self.style.SUCCESS(f"\nCleaned fixture written to: {output_path}")
-        )
+        if in_place:
+            self.stdout.write(
+                self.style.SUCCESS(f"\n✓ In-place cleaning completed successfully!")
+            )
+            self.stdout.write(f"File {output_path} has been cleaned.")
+        else:
+            self.stdout.write(
+                self.style.SUCCESS(f"\nCleaned fixture written to: {output_path}")
+            )
+
         self.stdout.write(
             "The fixture is now much cleaner (only official organogramas + clean related data)."
         )
         self.stdout.write(
-            "You can commit/replace data/full_data.json with this file."
+            "You can commit this file (or replace data/full_data.json with it)."
         )
