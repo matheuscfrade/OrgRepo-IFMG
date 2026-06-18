@@ -11,7 +11,7 @@ cd OrgRepo-IFMG
 
 # 2. Criar e ativar ambiente virtual
 python -m venv .venv
-.\ .venv\Scripts\activate          # Windows
+.\.venv\Scripts\activate          # Windows
 
 # 3. Instalar dependências
 pip install -r requirements.txt
@@ -178,9 +178,9 @@ Isso costuma acontecer por causa de como o Python carrega os módulos no Windows
 $env:DJANGO_SETTINGS_MODULE = "config.settings.development"
 
 # Exemplos:
-.\ .venv\Scripts\python.exe manage.py migrate
-.\ .venv\Scripts\python.exe manage.py load_consup44_modelos
-.\ .venv\Scripts\python.exe manage.py runserver
+.\.venv\Scripts\python.exe manage.py migrate
+.\.venv\Scripts\python.exe manage.py load_consup44_modelos
+.\.venv\Scripts\python.exe manage.py runserver
 ```
 
 Faça o mesmo para qualquer outro comando do Django.

@@ -1,7 +1,8 @@
-from .settings import *  # noqa: F401,F403
+from .settings.development import *  # noqa: F401,F403
 
 IS_MANUAL_TEST = True
 
+VAR_DIR = BASE_DIR / 'var'
 MANUAL_TEST_DIR = VAR_DIR / 'manual_test'
 MANUAL_TEST_MEDIA_ROOT = MANUAL_TEST_DIR / 'media'
 

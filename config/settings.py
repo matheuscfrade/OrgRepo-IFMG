@@ -1,13 +1,15 @@
 """
 Django settings router.
 
-By default uses development settings.
-Override with DJANGO_SETTINGS_MODULE=config.settings.production
+The actual settings are in the config/settings/ package.
+
+To run with development settings:
+    $env:DJANGO_SETTINGS_MODULE = "config.settings.development"
+    python manage.py runserver
+
+To run with production settings:
+    $env:DJANGO_SETTINGS_MODULE = "config.settings.production"
+    python manage.py runserver
 """
 
-import os
-
-# Default to development settings
-os.environ.setdefault('DJANGO_SETTINGS_MODULE', 'config.settings.development')
-
-from .development import *  # noqa: F401,F403
+from config.settings.development import *  # noqa: F401,F403

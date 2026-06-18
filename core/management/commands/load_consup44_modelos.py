@@ -2,6 +2,7 @@
 from django.db import transaction
 
 from core.models import (
+    Campus,
     CargoFuncao,
     Dimensionamento,
     ModeloReferencial,
@@ -272,6 +273,10 @@ class Command(BaseCommand):
                 regras, _ = RegrasAlteracaoModelo.objects.get_or_create(modelo_referencial=modelo)
                 apply_rule_defaults(regras)
                 regras.save()
+
+            # Also load basic Campi as part of the foundation
+            self.ensure_basic_campi(dimensions)
+
         self.stdout.write(self.style.SUCCESS(f'Modelos referenciais carregados: {len(MODELOS)} modelos, {total} unidades.'))
 
     def ensure_dimensionamentos(self):
@@ -356,4 +361,46 @@ class Command(BaseCommand):
         for child_order, child in enumerate(data['children'], start=1):
             count += self.create_unit_tree(modelo, child, unidade, cargos, tipos, dimensionamento, child_order)
         return count
+
+    def ensure_basic_campi(self, dimensions):
+        """Creates the basic list of IFMG Campi as part of the foundation data."""
+        campi_data = [
+            ("IFMG - Reitoria", "IFMG", "REITORIA"),
+            ("Campus Betim", "CBMG-BET", "150"),
+            ("Campus Congonhas", "CBMG-CON", "70_45"),
+            ("Campus Formiga", "CBMG-FOR", "70_45"),
+            ("Campus Governador Valadares", "CBMG-GVA", "70_45"),
+            ("Campus Ibirité", "CBMG-IBI", "70_45"),
+            ("Campus Ipatinga", "CBMG-IPA", "70_45"),
+            ("Campus Ouro Preto", "CBMG-OPR", "70_45"),
+            ("Campus Pouso Alegre", "CBMG-POA", "70_45"),
+            ("Campus Sabará", "CBMG-SAB", "70_45"),
+            ("Campus Santa Luzia", "CBMG-SLU", "70_45"),
+            ("Campus São João Evangelista", "CBMG-SJE", "70_45"),
+            ("Campus Varginha", "CBMG-VAR", "70_45"),
+            ("Campus Bambuí", "CBMG-BAM", "150_AGRI"),
+            ("Campus Januária", "CBMG-JAN", "150_AGRI"),
+            ("Campus Montes Claros", "CBMG-MOC", "150_AGRI"),
+            ("Campus Pirapora", "CBMG-PIR", "150_AGRI"),
+            ("Campus São João da Ponte", "CBMG-SJP", "150_AGRI"),
+            ("Polo de Inovação", "POLO-INOV", "POLO"),
+            ("Campus Conselheiro Lafaiete", "CBMG-CLF", "40_26"),
+        ]
+
+        created = 0
+        for nome, sigla, dim_chave in campi_data:
+            dim = dimensions.get(dim_chave)
+            campus, was_created = Campus.objects.get_or_create(
+                sigla=sigla,
+                defaults={
+                    "nome": nome,
+                    "dimensionamento": dim_chave,
+                    "dimensionamento_fk": dim,
+                },
+            )
+            if was_created:
+                created += 1
+
+        if created:
+            self.stdout.write(f"  {created} Campi created as part of foundation.")
 

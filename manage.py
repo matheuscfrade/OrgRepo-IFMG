@@ -6,8 +6,10 @@ import sys
 
 def main():
     """Run administrative tasks."""
-    # Default to development settings if not explicitly set
-    os.environ.setdefault('DJANGO_SETTINGS_MODULE', 'config.settings.development')
+    # Force development settings unless explicitly overridden
+    if not os.environ.get('DJANGO_SETTINGS_MODULE'):
+        os.environ['DJANGO_SETTINGS_MODULE'] = 'config.settings.development'
+
     try:
         from django.core.management import execute_from_command_line
     except ImportError as exc:

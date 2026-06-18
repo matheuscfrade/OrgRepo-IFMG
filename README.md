@@ -52,7 +52,7 @@ Este repositório está configurado para conter **apenas a fundação normativa*
 python -m venv .venv
 
 # Windows
-.\ .venv\Scripts\activate
+.\.venv\Scripts\activate
 
 # Instale as dependências
 pip install -r requirements.txt
@@ -65,7 +65,33 @@ python manage.py migrate
 python manage.py load_consup44_modelos
 ```
 
+> **Nota para usuários Windows**:  
+> Se aparecer o erro `No module named 'config.development'`, defina a variável de ambiente antes de rodar os comandos:
+> ```powershell
+> $env:DJANGO_SETTINGS_MODULE = "config.settings.development"
+> .\venv\Scripts\python.exe manage.py runserver
+> ```
+> Veja mais detalhes em [docs/setup.md](docs/setup.md).
+
 Este comando cria toda a estrutura normativa da Resolução CONSUP 44/2025 (incluindo a lista básica de Campi).
+
+### Opção B – Carregue Dados Completos (Opcional)
+
+Se quiser restaurar um estado mais completo (com organogramas reais, regimentos, resoluções etc.) que já vem incluído no repositório, rode simplesmente:
+
+```bash
+python manage.py load_full_data
+```
+
+Isso carrega automaticamente o arquivo `data/full_data.json` + os PDFs de `data/media/` (copiados para `var/media/`).
+
+**Importante**: O arquivo `data/full_data.json` foi criado durante o desenvolvimento do projeto e **pode não refletir a situação atual do IFMG**. Ele serve principalmente como exemplo de um ambiente populado.
+
+Caso você queira gerar o seu próprio arquivo `full_data.json` a partir de outro banco:
+
+```bash
+python manage.py dump_full_data --output data/full_data.json
+```
 
 ### 3. Crie um Superusuário
 
@@ -81,21 +107,13 @@ python manage.py runserver
 
 Acesse o sistema em: [http://127.0.0.1:8000/admin/](http://127.0.0.1:8000/admin/)
 
-**Para carregar dados completos** (organogramas reais, regimentos, resoluções etc. em vez da fundação limpa):
-
-```bash
-python manage.py load_full_data
-```
-
-(O arquivo `data/full_data.json` + os PDFs já vêm incluídos no repositório em `data/`)
-
 ## Comandos Úteis
 
 | Comando | Descrição |
 |---------|-----------|
 | `python manage.py load_consup44_modelos` | Carrega a fundação (Modelos Referenciais + Campi básicos) |
-| `python manage.py load_full_data` | Carrega os dados completos (organogramas reais etc.) que já vêm no repositório |
-| `python manage.py dump_full_data --output data/full_data.json` | Gera um novo dump completo (caso você tenha mais dados) |
+| `python manage.py dump_full_data --output full_data.json` | Gera um dump completo dos dados (para backup ou compartilhamento) |
+| `python manage.py load_full_data` | Restaura um dump completo de dados (data/full_data.json + PDFs) |
 | `python manage.py purge_instance_data --github-minimal --force` | Remove todos os dados de campi e organogramas (deixa apenas a fundação 44) |
 
 ## Fluxo de Desenvolvimento Recomendado (Para Forks e Contribuidores)

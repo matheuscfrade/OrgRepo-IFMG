@@ -81,6 +81,13 @@ var/backups/
 var/*.log
 var/manual_test/
 
+# Allow committed foundation / full data (but still ignore live runtime data in var/)
+!data/
+!data/**
+!data/media/
+!data/media/**
+var/
+
 # One-off / archived dev scripts (kept in scripts/archive/ but ignored for cleanliness)
 scripts/archive/
 
