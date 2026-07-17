@@ -12,7 +12,9 @@ O repositório já inclui o código, o snapshot de dados (`data/full_data.json`)
 | `web` | Django + Gunicorn (volume `media_data` para PDFs) |
 
 - Arquivos estáticos: WhiteNoise (`collectstatic` automático no start)
-- PDFs: volume Docker; a app pode servir em `/media/` (`SERVE_MEDIA=True`) ou a TI pode colocar um proxy
+- PDFs: volume Docker; com `SERVE_MEDIA=True` a app serve `/media/` (incluindo com `DEBUG=False`). Alternativa: proxy institucional em `/media/` e `SERVE_MEDIA=False`
+- Snapshot: organogramas e documentos oficiais; **competências de unidades vêm vazias** neste release (importação posterior se necessário)
+- Contas: o snapshot **não** inclui usuários; criar admin com `createsuperuser`
 
 ## Pré-requisitos
 
@@ -85,12 +87,22 @@ docker compose exec web python manage.py createsuperuser
 docker compose exec web python manage.py createsuperuser
 ```
 
-> **Importante:** com `RUN_BOOTSTRAP=full` permanente, o snapshot pode ser recarregado a cada start e sobrescrever dados de produção.
+> **Importante:** não deixe `RUN_BOOTSTRAP=full` permanente. Cada restart reexecuta import/sync (a maioria das linhas existentes é ignorada, arquivos de mídia são reescritos e os modelos referenciais são reconstruídos). Não é operação de produção idempotente.
+
+Smoke test após a carga:
+
+```bash
+# App responde
+curl -fsS "http://SERVIDOR:8000/" >/dev/null && echo OK
+
+# PDF (exemplo — ajuste o caminho se necessário)
+# curl -fsSI "http://SERVIDOR:8000/media/regimentos_campus/..." | head -n1
+```
 
 ## 4. Acessar
 
 - Aplicação: `http://SERVIDOR:8000/`
-- Admin: `http://SERVIDOR:8000/admin/`
+- Admin: `http://SERVIDOR:8000/admin/` (após `createsuperuser`)
 
 ## 5. Atualização de versão (sem recarregar dados)
 
@@ -152,7 +164,7 @@ Se a TI servir PDFs pelo proxy, monte o volume de mídia no proxy e use `SERVE_M
 | `SECRET_KEY is missing` | Preencher `SECRET_KEY` no `.env` |
 | `ALLOWED_HOSTS is empty` | Preencher `ALLOWED_HOSTS` |
 | CSS quebrado | Logs do start (`collectstatic`) |
-| PDF 404 | Bootstrap com `load_full_data` e `SERVE_MEDIA=True` (ou proxy de mídia) |
+| PDF 404 | Rodar `load_full_data` (com mídia); `SERVE_MEDIA=True`; volume `media_data` montado |
 | Erro de CSRF no login | `CSRF_TRUSTED_ORIGINS` com a URL HTTPS completa |
 | Dados somem após restart | `RUN_BOOTSTRAP=full` ainda ativo no `.env` |
 

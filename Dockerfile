@@ -12,10 +12,12 @@ ENV PYTHONDONTWRITEBYTECODE=1 \
 WORKDIR /app
 
 # System deps: build tools for psycopg if needed + client for health checks
+# gosu: drop root → appuser after fixing volume ownership
 RUN apt-get update && apt-get install -y --no-install-recommends \
     build-essential \
     libpq-dev \
     curl \
+    gosu \
     && rm -rf /var/lib/apt/lists/*
 
 # Python deps (production set)
@@ -28,16 +30,16 @@ COPY . /app/
 
 # Runtime dirs (media may be replaced by a Docker volume)
 RUN mkdir -p /app/var/media /app/staticfiles \
-    && chmod +x /app/scripts/docker-entrypoint.sh
-
-# Non-root user
-RUN useradd -m -u 1000 appuser \
+    && chmod +x /app/scripts/docker-entrypoint.sh \
+    && useradd -m -u 1000 appuser \
     && chown -R appuser:appuser /app
-USER appuser
+
+# Entrypoint starts as root to chown mounted volumes, then drops to appuser.
+USER root
 
 EXPOSE 8000
 
-HEALTHCHECK --interval=30s --timeout=5s --start-period=60s --retries=3 \
+HEALTHCHECK --interval=30s --timeout=5s --start-period=90s --retries=3 \
   CMD curl -fsS "http://127.0.0.1:8000/" >/dev/null || exit 1
 
 ENTRYPOINT ["/app/scripts/docker-entrypoint.sh"]

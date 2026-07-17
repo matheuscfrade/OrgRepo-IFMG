@@ -64,10 +64,31 @@ CSRF_TRUSTED_ORIGINS = _env_list("CSRF_TRUSTED_ORIGINS")
 # ---------------------------------------------------------------------------
 import dj_database_url  # noqa: E402
 
-_database_url = os.getenv("DATABASE_URL")
+def _build_database_url() -> str:
+    """Prefer DATABASE_URL; otherwise build from POSTGRES_* with URL-encoded credentials."""
+    from urllib.parse import quote
+
+    explicit = os.getenv("DATABASE_URL")
+    if explicit:
+        return explicit
+
+    user = os.getenv("POSTGRES_USER")
+    password = os.getenv("POSTGRES_PASSWORD")
+    host = os.getenv("POSTGRES_HOST", "db")
+    port = os.getenv("POSTGRES_PORT", "5432")
+    name = os.getenv("POSTGRES_DB") or os.getenv("POSTGRES_DATABASE")
+    if user and password and name:
+        return (
+            f"postgres://{quote(user, safe='')}:{quote(password, safe='')}"
+            f"@{host}:{port}/{name}"
+        )
+    return ""
+
+
+_database_url = _build_database_url()
 if not _database_url:
     raise RuntimeError(
-        "DATABASE_URL is required in production. "
+        "DATABASE_URL is required in production (or POSTGRES_USER/PASSWORD/DB + POSTGRES_HOST). "
         "Example: postgres://user:pass@db:5432/orgrepo"
     )
 
@@ -82,9 +103,10 @@ DATABASES = {
 # ---------------------------------------------------------------------------
 # Security (env-tunable for reverse-proxy TLS termination)
 # ---------------------------------------------------------------------------
-SECURE_SSL_REDIRECT = _env_bool("SECURE_SSL_REDIRECT", True)
-SESSION_COOKIE_SECURE = _env_bool("SESSION_COOKIE_SECURE", True)
-CSRF_COOKIE_SECURE = _env_bool("CSRF_COOKIE_SECURE", True)
+# Defaults False for safe first boot / TLS-terminating proxy; set True when app sees HTTPS.
+SECURE_SSL_REDIRECT = _env_bool("SECURE_SSL_REDIRECT", False)
+SESSION_COOKIE_SECURE = _env_bool("SESSION_COOKIE_SECURE", False)
+CSRF_COOKIE_SECURE = _env_bool("CSRF_COOKIE_SECURE", False)
 SECURE_BROWSER_XSS_FILTER = True
 SECURE_CONTENT_TYPE_NOSNIFF = True
 X_FRAME_OPTIONS = "DENY"

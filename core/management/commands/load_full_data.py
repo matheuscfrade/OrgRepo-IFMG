@@ -39,11 +39,13 @@ from copy import deepcopy
 from io import StringIO
 from pathlib import Path
 
+from django.apps import apps
 from django.conf import settings
 from django.core import serializers
 from django.core.exceptions import ValidationError
-from django.core.management.base import BaseCommand
-from django.db import IntegrityError, transaction
+from django.core.management.base import BaseCommand, CommandError
+from django.core.management.color import no_style
+from django.db import IntegrityError, connection, transaction
 
 
 # Models with self-FK trees that often need multi-pass loading
@@ -51,6 +53,17 @@ from django.db import IntegrityError, transaction
 SELF_FK_MODELS = {
     "core.unit",
     "core.unitmodelo",
+}
+
+# If PK already exists, still apply fixture fields (avoids migrate-created
+# placeholder rows blocking Reitor/etc. with wrong natural keys).
+LOOKUP_UPDATE_MODELS = {
+    "core.cargofuncao",
+    "core.tipounidade",
+    "core.dimensionamento",
+    "core.campus",
+    "core.modeloreferencial",
+    "core.regrasalteracaomodelo",
 }
 
 # Max passes for dependency-ordered retry
@@ -91,15 +104,11 @@ class Command(BaseCommand):
             fixture_path = settings.BASE_DIR / fixture_path
 
         if not fixture_path.exists():
-            self.stdout.write(self.style.ERROR(f"Fixture not found: {fixture_path}"))
-            self.stdout.write(
-                self.style.WARNING(
-                    "The full data snapshot (data/full_data.json) is not present in this clone.\n"
-                    "Use the clean foundation instead:\n"
-                    "    python manage.py load_consup44_modelos"
-                )
+            raise CommandError(
+                f"Fixture not found: {fixture_path}\n"
+                "Provide data/full_data.json or use:\n"
+                "    python manage.py load_consup44_modelos"
             )
-            return
 
         self.stdout.write(f"Loading full data from {fixture_path}...")
 
@@ -121,8 +130,10 @@ class Command(BaseCommand):
         try:
             fixture_objects = json.loads(fixture_content)
         except json.JSONDecodeError as e:
-            self.stdout.write(self.style.ERROR(f"Invalid JSON fixture: {e}"))
-            return
+            raise CommandError(f"Invalid JSON fixture: {e}") from e
+
+        if not isinstance(fixture_objects, list) or not fixture_objects:
+            raise CommandError(f"Fixture is empty or not a JSON list: {fixture_path}")
 
         # Natural-key maps for CargoFuncao / TipoUnidade (foundation PKs may differ)
         self._cargo_pk_map = self._build_cargo_map(fixture_objects)
@@ -206,7 +217,7 @@ class Command(BaseCommand):
         # Summary
         self.stdout.write("")
         self.stdout.write(self.style.SUCCESS("Import finished."))
-        self.stdout.write(f"  Loaded:   {loaded}")
+        self.stdout.write(f"  Loaded / applied: {loaded}")
         self.stdout.write(f"  Skipped (conflicts/unresolvable FKs): {skipped}")
         if errors:
             self.stdout.write(self.style.WARNING(f"  Errors:   {errors}"))
@@ -215,20 +226,38 @@ class Command(BaseCommand):
             for reason, count in skip_reasons.most_common(15):
                 self.stdout.write(f"    [{count}] {reason}")
 
-        self._print_integrity_report(fixture_objects)
-
-        if loaded == 0 and skipped > 0:
-            self.stdout.write(
-                self.style.WARNING(
-                    "\nNo objects were loaded because of conflicts.\n"
-                    "Prefer a clean database for full restore:\n"
-                    "    Remove var/db.sqlite3, then: migrate + load_full_data\n"
-                    "Or follow docs/setup.md (Opção B – dados completos)."
-                )
+        expected_core = sum(
+            1
+            for o in fixture_objects
+            if (o.get("model") or "").lower()
+            in {
+                "core.campus",
+                "core.organograma",
+                "core.unit",
+                "core.regimentocampus",
+                "core.resolucaoestruturaorganizacional",
+            }
+        )
+        if loaded == 0 and expected_core > 0:
+            raise CommandError(
+                "No objects were loaded while the fixture has core instance data. "
+                "Use a clean database: migrate, then load_full_data (docs/setup.md Opção B)."
             )
+
+        problems = self._print_integrity_report(fixture_objects)
+        if problems:
+            raise CommandError(
+                f"{problems} core model(s) below fixture count after load. "
+                "Bootstrap aborted so the app does not start half-loaded. "
+                "Fix the database/fixture and retry."
+            )
+
+        # Postgres: reset sequences after explicit-PK inserts (like loaddata).
+        self._reset_postgres_sequences(fixture_objects)
 
         # Align cargo quotas with official organogramas (avoids "CD-03: 4 / -")
         # Fixture cotas often use different CargoFuncao PKs than the foundation.
+        # Docker path runs sync again after load_consup44_modelos (authoritative).
         self._sync_cargo_quotas_from_officials()
 
         # Copy media files (PDFs of regimentos, resoluções, etc.)
@@ -375,24 +404,25 @@ class Command(BaseCommand):
 
     def _try_save_one(self, obj_data, aggressive_null=False):
         """Attempt to deserialize+save one fixture object. Returns (ok, reason)."""
-        from django.apps import apps
-
-        model_name = obj_data.get("model", "")
+        model_name = (obj_data.get("model") or "").lower()
         try:
             app_label, model_code = model_name.split(".", 1)
             model = apps.get_model(app_label, model_code)
         except Exception:
             model = None
 
-        # Skip if already present by PK
+        # Skip if already present by PK (except lookup models we force-update)
         pk = obj_data.get("pk")
         if model is not None and pk is not None:
             try:
                 if model.objects.filter(pk=pk).exists():
-                    # Update existing with remapped FKs for Unit cargo/tipo
-                    if model_name == "core.unit":
+                    if model_name in LOOKUP_UPDATE_MODELS:
+                        pass  # fall through: overwrite fields from fixture
+                    elif model_name == "core.unit":
                         self._repair_existing_unit_fks(model, pk, obj_data)
-                    return True, None
+                        return True, None
+                    else:
+                        return True, None
             except Exception:
                 pass
 
@@ -464,10 +494,7 @@ class Command(BaseCommand):
         return updated
 
     def _print_integrity_report(self, fixture_objects):
-        """Compare key model counts fixture vs DB after load."""
-        from django.apps import apps
-        from collections import Counter
-
+        """Compare key model counts fixture vs DB after load. Returns problem count."""
         fix_counts = Counter((o.get("model") or "").lower() for o in fixture_objects)
         watch = [
             "core.campus",
@@ -483,6 +510,7 @@ class Command(BaseCommand):
         for label in watch:
             expected = fix_counts.get(label, 0)
             if expected == 0:
+                # Empty on purpose (e.g. competências) — not a failure.
                 continue
             try:
                 app_label, model_code = label.split(".", 1)
@@ -490,7 +518,6 @@ class Command(BaseCommand):
                 actual = model.objects.count()
             except Exception:
                 continue
-            # Campus may have extras from foundation (different siglas) — warn only if short
             status = "OK" if actual >= expected else "SHORT"
             if actual < expected:
                 problems += 1
@@ -505,13 +532,49 @@ class Command(BaseCommand):
         if problems:
             self.stdout.write(
                 self.style.WARNING(
-                    f"\n{problems} model(s) below fixture count. "
-                    "On a mixed DB, try a clean restore: delete var/db.sqlite3, "
-                    "migrate, then load_full_data (see docs/setup.md Opção B)."
+                    f"\n{problems} model(s) below fixture count."
                 )
             )
         else:
             self.stdout.write(self.style.SUCCESS("  Core instance data matches the fixture."))
+        return problems
+
+    def _reset_postgres_sequences(self, fixture_objects):
+        """Reset PK sequences after explicit-PK inserts (PostgreSQL only)."""
+        if connection.vendor != "postgresql":
+            return
+
+        models = []
+        seen = set()
+        for obj in fixture_objects:
+            label = (obj.get("model") or "").lower()
+            if not label or label in seen:
+                continue
+            seen.add(label)
+            try:
+                app_label, model_code = label.split(".", 1)
+                model = apps.get_model(app_label, model_code)
+            except Exception:
+                continue
+            if model is not None:
+                models.append(model)
+
+        if not models:
+            return
+
+        style = no_style()
+        sql_list = connection.ops.sequence_reset_sql(style, models)
+        if not sql_list:
+            return
+
+        with connection.cursor() as cursor:
+            for sql in sql_list:
+                cursor.execute(sql)
+        self.stdout.write(
+            self.style.SUCCESS(
+                f"PostgreSQL sequences reset for {len(sql_list)} statement(s)."
+            )
+        )
 
     def _verify_media_files(self, fixture_objects):
         """Warn if referenced media files are missing under MEDIA_ROOT."""

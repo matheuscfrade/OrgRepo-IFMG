@@ -1,5 +1,6 @@
 #!/bin/sh
 # OrgRepo Docker entrypoint (production)
+# - fix media/static volume ownership (as root), then drop to appuser
 # - wait for Postgres
 # - migrate + collectstatic
 # - optional one-shot bootstrap (RUN_BOOTSTRAP=full|foundation)
@@ -8,6 +9,38 @@
 set -e
 
 echo "[entrypoint] Starting OrgRepo..."
+
+# ---------------------------------------------------------------------------
+# Privileged bootstrap: writable volumes for uid 1000 (appuser)
+# ---------------------------------------------------------------------------
+if [ "$(id -u)" = "0" ]; then
+  mkdir -p /app/var/media /app/staticfiles
+  chown -R appuser:appuser /app/var /app/staticfiles 2>/dev/null || true
+  # Re-exec as appuser for the rest of the process (security)
+  exec gosu appuser "$0" "$@"
+fi
+
+# ---------------------------------------------------------------------------
+# Build DATABASE_URL with URL-encoded credentials when only POSTGRES_* are set
+# ---------------------------------------------------------------------------
+if [ -z "${DATABASE_URL:-}" ] && [ -n "${POSTGRES_PASSWORD:-}" ]; then
+  export DATABASE_URL="$(
+    python - <<'PY'
+import os
+from urllib.parse import quote
+
+user = os.environ.get("POSTGRES_USER", "orgrepo")
+password = os.environ.get("POSTGRES_PASSWORD", "")
+host = os.environ.get("POSTGRES_HOST", "db")
+port = os.environ.get("POSTGRES_PORT", "5432")
+name = os.environ.get("POSTGRES_DB") or os.environ.get("POSTGRES_DATABASE") or "orgrepo"
+print(
+    f"postgres://{quote(user, safe='')}:{quote(password, safe='')}@{host}:{port}/{name}"
+)
+PY
+  )"
+  echo "[entrypoint] DATABASE_URL built from POSTGRES_* (password URL-encoded)."
+fi
 
 # ---------------------------------------------------------------------------
 # Wait for database
@@ -20,21 +53,17 @@ import sys
 import time
 
 import dj_database_url
-from django.db import connection
-from django.conf import settings
 
-# Minimal settings bootstrap for DB check without full Django app load if needed
 url = os.environ.get("DATABASE_URL")
 if not url:
     sys.exit(0)
 
 cfg = dj_database_url.parse(url)
-# Use raw psycopg connection for health wait (no Django setup required)
 try:
     import psycopg
 except ImportError:
-    print("[entrypoint] psycopg not available; skipping DB wait", flush=True)
-    sys.exit(0)
+    print("[entrypoint] psycopg not available; cannot wait for DB", flush=True)
+    sys.exit(1)
 
 host = cfg.get("HOST") or "localhost"
 port = int(cfg.get("PORT") or 5432)
@@ -42,7 +71,7 @@ user = cfg.get("USER") or ""
 password = cfg.get("PASSWORD") or ""
 dbname = cfg.get("NAME") or ""
 
-deadline = time.time() + int(os.environ.get("DB_WAIT_SECONDS", "60"))
+deadline = time.time() + int(os.environ.get("DB_WAIT_SECONDS", "90"))
 last_err = None
 while time.time() < deadline:
     try:
@@ -81,10 +110,10 @@ python manage.py collectstatic --noinput
 # One-shot data bootstrap (never leave RUN_BOOTSTRAP=full permanently)
 #   foundation → load_consup44_modelos
 #   full       → load_full_data + load_consup44_modelos + sync_cargo_quotas
+# Failures here abort the container (set -e) so TI does not see a false-healthy stack.
 BOOTSTRAP="${RUN_BOOTSTRAP:-}"
 if [ "$BOOTSTRAP" = "full" ]; then
   echo "[entrypoint] RUN_BOOTSTRAP=full — loading full snapshot + normative models..."
-  echo "[entrypoint] NOTE: data/full_data.json must already reflect finalized organograms (dump after edits in dev)."
   python manage.py load_full_data
   python manage.py load_consup44_modelos
   python manage.py sync_cargo_quotas

@@ -1,8 +1,11 @@
 """
 Campi 40/26 e 70/45: Diretoria ocupa CD-04 como Diretor(a), não Coordenador(a).
 
-Creates CargoFuncao Diretor(a)/CD-04 if missing, rewires UnitModelo and Unit
-for those dimensionamentos, and updates TipoUnidade.Diretoria allowed cargos.
+Rewires UnitModelo/Unit when foundation data already exists.
+On a fresh empty database (TI migrate before load_full_data), this is a no-op
+so we never create CargoFuncao Diretor(a)/CD-04 as pk=1 and clash with the
+snapshot's Reitor(a)/CD-01. Diretor CD-04 is created later by the fixture
+and/or load_consup44_modelos.
 """
 
 from django.db import migrations
@@ -19,15 +22,19 @@ def forwards(apps, schema_editor):
     UnitModelo = apps.get_model('core', 'UnitModelo')
     ModeloReferencial = apps.get_model('core', 'ModeloReferencial')
 
+    # Empty DB (pre-snapshot): do not insert cargos — fixture owns PKs.
+    if not CargoFuncao.objects.exists():
+        return
+
     coord_cd04 = CargoFuncao.objects.filter(sigla='CD-04', nome='Coordenador(a)').order_by('id').first()
     if not coord_cd04:
-        coord_cd04 = CargoFuncao.objects.filter(sigla='CD-04').order_by('id').first()
+        coord_cd04 = CargoFuncao.objects.filter(sigla='CD-04', nome__icontains='Coordenador').order_by('id').first()
 
     diretor_cd04 = CargoFuncao.objects.filter(sigla='CD-04', nome='Diretor(a)').order_by('id').first()
     if not diretor_cd04:
+        # Only create when other cargos already exist (PK will not steal id=1).
         diretor_cd04 = CargoFuncao.objects.create(sigla='CD-04', nome='Diretor(a)')
 
-    # Copy dimension permissions from Coordenador CD-04 when present
     if coord_cd04:
         dim_ids = list(coord_cd04.dimensionamentos_permitidos.values_list('id', flat=True))
         if dim_ids:
@@ -51,7 +58,6 @@ def forwards(apps, schema_editor):
     if not dim_ids:
         return
 
-    # UnitModelo under 40/26 and 70/45 models: Diretoria + CD-04 → Diretor(a) CD-04
     modelos = ModeloReferencial.objects.filter(dimensionamento_id__in=dim_ids)
     UnitModelo.objects.filter(
         modelo__in=modelos,
@@ -62,7 +68,6 @@ def forwards(apps, schema_editor):
         sigla_cargo='CD-04',
     )
 
-    # Also by cargo name Coordenador if tipo missing
     if coord_cd04:
         UnitModelo.objects.filter(
             modelo__in=modelos,
@@ -70,7 +75,6 @@ def forwards(apps, schema_editor):
             cargo_funcao_ref=coord_cd04,
         ).update(cargo_funcao_ref=diretor_cd04, sigla_cargo='CD-04')
 
-    # Live organogram units on those campi
     Unit.objects.filter(
         organograma__campus__dimensionamento_fk_id__in=dim_ids,
         tipo_unidade__nome='Diretoria',
@@ -86,7 +90,6 @@ def forwards(apps, schema_editor):
             cargo_funcao_ref=coord_cd04,
         ).update(cargo_funcao_ref=diretor_cd04, sigla_cargo='CD-04')
 
-    # Fallback: campus.dimensionamento legacy char field
     Unit.objects.filter(
         organograma__campus__dimensionamento__in=DIMS,
         tipo_unidade__nome='Diretoria',

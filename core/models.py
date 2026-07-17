@@ -360,7 +360,8 @@ class TipoUnidade(models.Model):
         verbose_name="Cargos ocupantes permitidos",
         help_text=(
             "Lista de cargos/funções aceitos para este tipo. Se vazia, vale apenas o cargo padrão. "
-            "Ex.: Diretoria pode permitir CD-03 (Diretor) e CD-04 (Coordenador) nos campi menores."
+            "Ex.: Diretoria pode permitir CD-03 Diretor(a) e CD-04 Diretor(a) nos campi 40/26 e 70/45 "
+            "(Coordenador(a)/CD-04 continua como cargo distinto para Coordenadoria)."
         ),
     )
     selecao_cargo_livre = models.BooleanField(
