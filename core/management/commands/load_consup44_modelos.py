@@ -29,11 +29,18 @@ CARGOS = {
     'CD-01': 'Reitor(a)',
     'CD-02': 'Diretor(a) Geral',
     'CD-03': 'Diretor(a)',
-    'CD-04': 'Coordenador(a)',
+    'CD-04': 'Coordenador(a)',  # Coordenadoria (todos os dimensionamentos)
     'FG-01': 'Chefe',
     'FG-02': 'Chefe',
     'FG-03': 'Supervisor(a)',
 }
+
+# Diretoria em modelos 40/26 e 70/45 usa CD-04 com nomenclatura de Diretor(a),
+# distinto do CD-04 Coordenador(a) das Coordenadorias.
+CARGO_DIRETOR_CD04_KEY = 'CD-04-DIR'
+CARGO_DIRETOR_CD04_NOME = 'Diretor(a)'
+CARGO_DIRETOR_CD04_SIGLA = 'CD-04'
+SMALL_CAMPUS_DIMS_WITH_DIRETORIA_CD04 = frozenset({'40_26', '70_45'})
 
 TIPOS = {
     'IFMG campus': ('Campus', 'CD-02'),
@@ -286,18 +293,24 @@ class Command(BaseCommand):
             result[chave] = dim
         return result
 
+    def _ensure_one_cargo(self, sigla, nome, dimensionamentos):
+        """Create/update a single CargoFuncao by (nome, sigla) without clobbering siblings."""
+        cargo = CargoFuncao.objects.filter(sigla=sigla, nome=nome).order_by('id').first()
+        if not cargo:
+            cargo = CargoFuncao.objects.create(sigla=sigla, nome=nome)
+        cargo.dimensionamentos_permitidos.add(*dimensionamentos)
+        return cargo
+
     def ensure_cargos(self, dimensionamentos):
         result = {}
         for sigla, nome in CARGOS.items():
-            cargos = CargoFuncao.objects.filter(sigla=sigla).order_by('id')
-            cargo = cargos.first()
-            if cargo:
-                cargos.update(nome=nome)
-                cargo.refresh_from_db()
-            else:
-                cargo = CargoFuncao.objects.create(sigla=sigla, nome=nome)
-            cargo.dimensionamentos_permitidos.add(*dimensionamentos)
-            result[sigla] = cargo
+            result[sigla] = self._ensure_one_cargo(sigla, nome, dimensionamentos)
+        # Diretor(a) CD-04 — ocupante de Diretoria nos campi 40/26 e 70/45
+        result[CARGO_DIRETOR_CD04_KEY] = self._ensure_one_cargo(
+            CARGO_DIRETOR_CD04_SIGLA,
+            CARGO_DIRETOR_CD04_NOME,
+            dimensionamentos,
+        )
         return result
 
     def ensure_tipos(self, cargos, dimensionamentos):
@@ -319,6 +332,19 @@ class Command(BaseCommand):
         tipo_secao.selecao_cargo_livre = False
         tipo_setor.save(update_fields=['selecao_cargo_livre'])
         tipo_secao.save(update_fields=['selecao_cargo_livre'])
+
+        # Diretoria: padrão CD-03; campi 40/26 e 70/45 usam CD-04 como Diretor(a)
+        tipo_diretoria = result.get('Diretoria')
+        if tipo_diretoria:
+            cd03 = cargos.get('CD-03')
+            cd04_dir = cargos.get(CARGO_DIRETOR_CD04_KEY)
+            if cd03:
+                tipo_diretoria.cargo_padrao = cd03
+                tipo_diretoria.save(update_fields=['cargo_padrao'])
+            permitidos = [c for c in (cd03, cd04_dir) if c is not None]
+            if permitidos:
+                tipo_diretoria.cargos_ocupantes_permitidos.set(permitidos)
+
         return result
 
     def ensure_modelo(self, chave, dimensionamento):
@@ -341,7 +367,21 @@ class Command(BaseCommand):
         is_flexible = 'ou' in cargo_sigla.lower()
         tipo_key = infer_tipo_key(data['name'], cargo_sigla)
         tipo = None if is_flexible else tipos.get(tipo_key)
-        cargo = None if is_flexible else cargos.get(cargo_sigla)
+        cargo = None
+        sigla_cargo_stored = ''
+        if not is_flexible:
+            # Diretoria + CD-04 nos modelos de campus pequeno = Diretor(a) CD-04
+            # (não Coordenador(a) CD-04 das Coordenadorias)
+            dim_chave = getattr(dimensionamento, 'chave', None) or ''
+            if (
+                tipo_key == 'Diretoria'
+                and cargo_sigla == 'CD-04'
+                and dim_chave in SMALL_CAMPUS_DIMS_WITH_DIRETORIA_CD04
+            ):
+                cargo = cargos.get(CARGO_DIRETOR_CD04_KEY) or cargos.get('CD-04')
+            else:
+                cargo = cargos.get(cargo_sigla)
+            sigla_cargo_stored = cargo.sigla if cargo else cargo_sigla
         unidade = UnitModelo.objects.create(
             modelo=modelo,
             unidade_pai=parent,
@@ -349,7 +389,7 @@ class Command(BaseCommand):
             tipo_unidade=tipo,
             cargo_funcao_ref=cargo,
             cargo_funcao='Chefe' if is_flexible else '',
-            sigla_cargo='' if is_flexible else cargo_sigla,
+            sigla_cargo=sigla_cargo_stored,
             ordem=order,
             permite_resolucao_flexivel=is_flexible,
         )

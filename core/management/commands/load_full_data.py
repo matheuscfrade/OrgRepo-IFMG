@@ -7,9 +7,12 @@ This is useful when you want to restore a complete previous state
 (all Campi + real Organogramas + Regimentos + Resoluções, etc.)
 on top of the clean foundation.
 
-The loader is **resilient**: it will import as many objects as possible
-even if some records conflict (unique constraints, duplicate Users/Profiles, etc.).
-At the end it prints a summary of what was loaded vs skipped.
+The loader is **resilient**:
+- Multi-pass import for self-referential FKs (Unit.unidade_pai, UnitModelo, etc.)
+- Natural-key remapping for CargoFuncao (nome+sigla) and TipoUnidade (nome)
+  when fixture PKs differ from an already-loaded foundation (load_consup44_modelos)
+- Optional FKs that still cannot be resolved are nulled so the object can load
+- At the end it prints a summary of what was loaded vs skipped
 
 Use --only-oficial to keep **only the official organogramas** (status=OFICIAL)
 and automatically remove test/draft data (RASCUNHO, PROPOSTA, test regimentos, etc.).
@@ -21,19 +24,42 @@ Usage examples:
     python manage.py load_full_data
     python manage.py load_full_data --only-oficial
     python manage.py load_full_data --file my_backup.json --only-oficial --no-media
+
+Recommended for a clean restore (avoids PK clashes with foundation):
+    python manage.py migrate
+    python manage.py load_full_data
+    python manage.py load_consup44_modelos   # refresh normative reference models
 """
 
+import json
 import os
 import shutil
+from collections import Counter, defaultdict
+from copy import deepcopy
+from io import StringIO
 from pathlib import Path
 
 from django.conf import settings
+from django.core import serializers
+from django.core.exceptions import ValidationError
 from django.core.management.base import BaseCommand
+from django.db import IntegrityError, transaction
+
+
+# Models with self-FK trees that often need multi-pass loading
+# (fixture model names are lowercase app_label.model)
+SELF_FK_MODELS = {
+    "core.unit",
+    "core.unitmodelo",
+}
+
+# Max passes for dependency-ordered retry
+MAX_PASSES = 30
 
 
 class Command(BaseCommand):
     help = (
-        "Load a full data fixture (best-effort / resilient mode). "
+        "Load a full data fixture (resilient multi-pass mode with FK remapping). "
         "Use --only-oficial to import ONLY the official organogramas (status=OFICIAL) "
         "and automatically clean test/draft data (including regimentos named 'test'). "
         "Defaults to data/full_data.json + copies PDFs from data/media/."
@@ -53,7 +79,10 @@ class Command(BaseCommand):
         parser.add_argument(
             "--only-oficial",
             action="store_true",
-            help="Import ONLY official organogramas (status=OFICIAL) and clean test/draft data (including regimentos named 'test').",
+            help=(
+                "Import ONLY official organogramas (status=OFICIAL) and clean "
+                "test/draft data (including regimentos named 'test')."
+            ),
         )
 
     def handle(self, *args, **options):
@@ -89,80 +118,123 @@ class Command(BaseCommand):
             with open(fixture_path, encoding="latin-1") as f:
                 fixture_content = f.read()
 
-        # Resilient object-by-object loading.
-        # This allows the command to succeed even when the historical fixture
-        # contains duplicates or conflicts with existing data (e.g. CargoFuncao,
-        # User + Profile relationships, etc.).
-        from io import StringIO
-        from django.core import serializers
-        from django.db import IntegrityError
-        from django.core.exceptions import ValidationError
+        try:
+            fixture_objects = json.loads(fixture_content)
+        except json.JSONDecodeError as e:
+            self.stdout.write(self.style.ERROR(f"Invalid JSON fixture: {e}"))
+            return
+
+        # Natural-key maps for CargoFuncao / TipoUnidade (foundation PKs may differ)
+        self._cargo_pk_map = self._build_cargo_map(fixture_objects)
+        self._tipo_pk_map = self._build_tipo_map(fixture_objects)
+        if self._cargo_pk_map or self._tipo_pk_map:
+            self.stdout.write(
+                f"Natural-key remaps ready: "
+                f"{len(self._cargo_pk_map)} cargos, {len(self._tipo_pk_map)} tipos"
+            )
+
+        # Filter objects for --only-oficial
+        if options.get("only_oficial"):
+            fixture_objects = self._filter_only_oficial(fixture_objects)
 
         loaded = 0
         skipped = 0
         errors = 0
+        skip_reasons = Counter()
 
-        self.stdout.write("Importing objects (best-effort mode)...")
+        # Group for multi-pass: non-self-FK first, then self-FK models
+        plain_objects = []
+        tree_objects = []
+        for obj_data in fixture_objects:
+            model = (obj_data.get("model") or "").lower()
+            if model in SELF_FK_MODELS:
+                tree_objects.append(obj_data)
+            else:
+                plain_objects.append(obj_data)
 
-        for deserialized_obj in serializers.deserialize(
-            "json", StringIO(fixture_content), ignorenonexistent=True
-        ):
-            obj = deserialized_obj.object
-            model_label = obj._meta.label
+        self.stdout.write("Importing objects (resilient multi-pass mode)...")
 
-            # --only-oficial: keep only real approved organogramas and clean test data
-            if options.get("only_oficial"):
-                if model_label == "core.organograma":
-                    if getattr(obj, "status", None) != "OFICIAL":
-                        skipped += 1
-                        continue  # skip drafts, propostas, etc.
+        # Pass 1+: plain objects (lookups, campi, organogramas, competencias later need units)
+        # Competencias depend on units — pull them into a third phase
+        competency_objects = [
+            o for o in plain_objects if (o.get("model") or "").lower() == "core.competenciaunidade"
+        ]
+        plain_without_comp = [
+            o for o in plain_objects if (o.get("model") or "").lower() != "core.competenciaunidade"
+        ]
 
-                # Clean obvious test/draft solicitações
-                if model_label == "core.solicitacaoalteracao":
-                    if getattr(obj, "status", None) in ("RASCUNHO", "DEVOLVIDO_CORRECAO"):
-                        skipped += 1
-                        continue
+        n_loaded, n_skipped, n_errors, reasons = self._multipass_load(
+            plain_without_comp, "lookup/relational"
+        )
+        loaded += n_loaded
+        skipped += n_skipped
+        errors += n_errors
+        skip_reasons.update(reasons)
 
-                # Remove test regimentos (e.g. one named "test")
-                if model_label == "core.regimentocampus":
-                    nome = (getattr(obj, "nome", "") or "").lower()
-                    if "test" in nome:
-                        skipped += 1
-                        continue
+        # Rebuild maps after cargos/tipos from fixture (or foundation) are present
+        self._cargo_pk_map = self._build_cargo_map(fixture_objects)
+        self._tipo_pk_map = self._build_tipo_map(fixture_objects)
 
-            try:
-                deserialized_obj.save()
-                loaded += 1
-            except (IntegrityError, ValidationError) as e:
-                skipped += 1
-                if options.get("verbosity", 1) >= 2:
-                    self.stdout.write(
-                        self.style.WARNING(f"  Skipped {model_label}: {e}")
-                    )
-            except Exception as e:
-                errors += 1
-                self.stdout.write(self.style.ERROR(f"  Error on {model_label}: {e}"))
+        # Tree objects (Unit, UnitModelo) — multi-pass for unidade_pai
+        n_loaded, n_skipped, n_errors, reasons = self._multipass_load(
+            tree_objects, "tree (self-FK)"
+        )
+        loaded += n_loaded
+        skipped += n_skipped
+        errors += n_errors
+        skip_reasons.update(reasons)
+
+        # Align unit cargo/tipo FKs to natural keys (fixes foundation PK clashes)
+        remapped = self._realign_unit_fks(fixture_objects)
+        if remapped:
+            self.stdout.write(
+                self.style.SUCCESS(
+                    f"Realignados cargos/tipos em {remapped} unidade(s) "
+                    f"(compatível com load_consup44_modelos prévio)."
+                )
+            )
+
+        # Competencias last (depend on units)
+        n_loaded, n_skipped, n_errors, reasons = self._multipass_load(
+            competency_objects, "competencias"
+        )
+        loaded += n_loaded
+        skipped += n_skipped
+        errors += n_errors
+        skip_reasons.update(reasons)
 
         # Summary
         self.stdout.write("")
-        self.stdout.write(self.style.SUCCESS(f"Import finished."))
+        self.stdout.write(self.style.SUCCESS("Import finished."))
         self.stdout.write(f"  Loaded:   {loaded}")
-        self.stdout.write(f"  Skipped (conflicts/duplicates): {skipped}")
+        self.stdout.write(f"  Skipped (conflicts/unresolvable FKs): {skipped}")
         if errors:
             self.stdout.write(self.style.WARNING(f"  Errors:   {errors}"))
+        if skip_reasons and options.get("verbosity", 1) >= 2:
+            self.stdout.write("  Top skip reasons:")
+            for reason, count in skip_reasons.most_common(15):
+                self.stdout.write(f"    [{count}] {reason}")
+
+        self._print_integrity_report(fixture_objects)
 
         if loaded == 0 and skipped > 0:
             self.stdout.write(
                 self.style.WARNING(
                     "\nNo objects were loaded because of conflicts.\n"
-                    "This usually happens when foundation data (Cargos, Profiles, etc.) "
-                    "already exists. Try on a fresh database after 'migrate' only."
+                    "Prefer a clean database for full restore:\n"
+                    "    Remove var/db.sqlite3, then: migrate + load_full_data\n"
+                    "Or follow docs/setup.md (Opção B – dados completos)."
                 )
             )
+
+        # Align cargo quotas with official organogramas (avoids "CD-03: 4 / -")
+        # Fixture cotas often use different CargoFuncao PKs than the foundation.
+        self._sync_cargo_quotas_from_officials()
 
         # Copy media files (PDFs of regimentos, resoluções, etc.)
         if not options.get("no_media"):
             self._copy_media_files()
+            self._verify_media_files(fixture_objects)
 
         if options.get("only_oficial"):
             self.stdout.write(
@@ -173,16 +245,417 @@ class Command(BaseCommand):
             )
         else:
             self.stdout.write(
-                self.style.WARNING(
-                    "Note: If reference models (Modelos Referenciais, Cargos, etc.) were overwritten, "
-                    "you may want to run:\n"
-                    "    python manage.py load_consup44_modelos"
+                self.style.NOTICE(
+                    "Dica: para alinhar Modelos Referenciais à Resolução 44 vigente, rode:\n"
+                    "    python manage.py load_consup44_modelos\n"
+                    "    python manage.py sync_cargo_quotas"
                 )
             )
 
+    # ------------------------------------------------------------------
+    # Natural-key maps
+    # ------------------------------------------------------------------
+    def _build_cargo_map(self, fixture_objects):
+        """Map fixture CargoFuncao PK -> current DB PK via (nome, sigla)."""
+        from core.models import CargoFuncao
+
+        mapping = {}
+        for obj in fixture_objects:
+            if obj.get("model") != "core.cargofuncao":
+                continue
+            fpk = obj.get("pk")
+            fields = obj.get("fields") or {}
+            nome = fields.get("nome")
+            sigla = fields.get("sigla")
+            if fpk is None or not nome:
+                continue
+            db = CargoFuncao.objects.filter(nome=nome, sigla=sigla).first()
+            if db and db.pk != fpk:
+                mapping[fpk] = db.pk
+            elif db:
+                mapping[fpk] = db.pk  # same PK, still useful as identity
+        return mapping
+
+    def _build_tipo_map(self, fixture_objects):
+        """Map fixture TipoUnidade PK -> current DB PK via nome."""
+        from core.models import TipoUnidade
+
+        mapping = {}
+        for obj in fixture_objects:
+            if obj.get("model") != "core.tipounidade":
+                continue
+            fpk = obj.get("pk")
+            fields = obj.get("fields") or {}
+            nome = fields.get("nome")
+            if fpk is None or not nome:
+                continue
+            db = TipoUnidade.objects.filter(nome=nome).first()
+            if db:
+                mapping[fpk] = db.pk
+        return mapping
+
+    def _filter_only_oficial(self, fixture_objects):
+        kept = []
+        for obj in fixture_objects:
+            model = obj.get("model")
+            fields = obj.get("fields") or {}
+            if model == "core.organograma":
+                if fields.get("status") != "OFICIAL":
+                    continue
+            if model == "core.solicitacaoalteracao":
+                if fields.get("status") in ("RASCUNHO", "DEVOLVIDO_CORRECAO"):
+                    continue
+            if model == "core.regimentocampus":
+                nome = (fields.get("nome") or "").lower()
+                if "test" in nome:
+                    continue
+            kept.append(obj)
+        return kept
+
+    # ------------------------------------------------------------------
+    # Multi-pass loader
+    # ------------------------------------------------------------------
+    def _multipass_load(self, objects, label):
+        if not objects:
+            return 0, 0, 0, Counter()
+
+        remaining = list(objects)
+        total_loaded = 0
+        total_errors = 0
+        reasons = Counter()
+
+        for pass_no in range(1, MAX_PASSES + 1):
+            if not remaining:
+                break
+            still = []
+            loaded_this = 0
+
+            for obj_data in remaining:
+                ok, reason = self._try_save_one(obj_data)
+                if ok:
+                    loaded_this += 1
+                    total_loaded += 1
+                else:
+                    still.append(obj_data)
+                    if reason:
+                        reasons[reason] += 1
+
+            if self.verbosity >= 2:
+                self.stdout.write(
+                    f"  [{label}] pass {pass_no}: loaded={loaded_this}, remaining={len(still)}"
+                )
+
+            if loaded_this == 0:
+                # Last resort: null optional FKs more aggressively and retry once
+                still2 = []
+                for obj_data in still:
+                    ok, reason = self._try_save_one(obj_data, aggressive_null=True)
+                    if ok:
+                        loaded_this += 1
+                        total_loaded += 1
+                    else:
+                        still2.append(obj_data)
+                        if reason:
+                            reasons[f"final:{reason}"] += 1
+                remaining = still2
+                break
+
+            remaining = still
+
+        skipped = len(remaining)
+        if remaining and self.verbosity >= 2:
+            for obj_data in remaining[:10]:
+                self.stdout.write(
+                    self.style.WARNING(
+                        f"  Unresolved {obj_data.get('model')} pk={obj_data.get('pk')}"
+                    )
+                )
+
+        return total_loaded, skipped, total_errors, reasons
+
+    def _try_save_one(self, obj_data, aggressive_null=False):
+        """Attempt to deserialize+save one fixture object. Returns (ok, reason)."""
+        from django.apps import apps
+
+        model_name = obj_data.get("model", "")
+        try:
+            app_label, model_code = model_name.split(".", 1)
+            model = apps.get_model(app_label, model_code)
+        except Exception:
+            model = None
+
+        # Skip if already present by PK
+        pk = obj_data.get("pk")
+        if model is not None and pk is not None:
+            try:
+                if model.objects.filter(pk=pk).exists():
+                    # Update existing with remapped FKs for Unit cargo/tipo
+                    if model_name == "core.unit":
+                        self._repair_existing_unit_fks(model, pk, obj_data)
+                    return True, None
+            except Exception:
+                pass
+
+        repaired = self._remap_fields(obj_data, aggressive_null=aggressive_null)
+        payload = json.dumps([repaired], ensure_ascii=False)
+
+        try:
+            with transaction.atomic():
+                for deserialized_obj in serializers.deserialize(
+                    "json", StringIO(payload), ignorenonexistent=True
+                ):
+                    deserialized_obj.save()
+            return True, None
+        except (IntegrityError, ValidationError) as e:
+            return False, f"{model_name}:{type(e).__name__}:{str(e)[:120]}"
+        except Exception as e:
+            # Deserialization errors (missing FK target mid-graph) etc.
+            return False, f"{model_name}:{type(e).__name__}:{str(e)[:120]}"
+
+    def _repair_existing_unit_fks(self, model, pk, obj_data):
+        """If unit already exists, fix cargo/tipo via natural-key map from fixture."""
+        fields = obj_data.get("fields") or {}
+        updates = {}
+        cargo_fix = fields.get("cargo_funcao_ref")
+        tipo_fix = fields.get("tipo_unidade")
+        if cargo_fix is not None and cargo_fix in self._cargo_pk_map:
+            updates["cargo_funcao_ref_id"] = self._cargo_pk_map[cargo_fix]
+        if tipo_fix is not None and tipo_fix in self._tipo_pk_map:
+            updates["tipo_unidade_id"] = self._tipo_pk_map[tipo_fix]
+        if updates:
+            model.objects.filter(pk=pk).update(**updates)
+
+    def _realign_unit_fks(self, fixture_objects):
+        """Force unit cargo/tipo FKs to match fixture natural keys (post-import)."""
+        from core.models import Unit
+
+        # Refresh maps against current DB
+        self._cargo_pk_map = self._build_cargo_map(fixture_objects)
+        self._tipo_pk_map = self._build_tipo_map(fixture_objects)
+
+        updated = 0
+        for obj_data in fixture_objects:
+            if (obj_data.get("model") or "").lower() != "core.unit":
+                continue
+            pk = obj_data.get("pk")
+            if pk is None or not Unit.objects.filter(pk=pk).exists():
+                continue
+            fields = obj_data.get("fields") or {}
+            updates = {}
+            cargo_fix = fields.get("cargo_funcao_ref")
+            tipo_fix = fields.get("tipo_unidade")
+            if cargo_fix is not None and cargo_fix in self._cargo_pk_map:
+                want = self._cargo_pk_map[cargo_fix]
+                if Unit.objects.filter(pk=pk).exclude(cargo_funcao_ref_id=want).exists():
+                    updates["cargo_funcao_ref_id"] = want
+            elif cargo_fix is None:
+                if Unit.objects.filter(pk=pk).exclude(cargo_funcao_ref_id=None).exists():
+                    updates["cargo_funcao_ref_id"] = None
+            if tipo_fix is not None and tipo_fix in self._tipo_pk_map:
+                want = self._tipo_pk_map[tipo_fix]
+                if Unit.objects.filter(pk=pk).exclude(tipo_unidade_id=want).exists():
+                    updates["tipo_unidade_id"] = want
+            elif tipo_fix is None:
+                if Unit.objects.filter(pk=pk).exclude(tipo_unidade_id=None).exists():
+                    updates["tipo_unidade_id"] = None
+            if updates:
+                Unit.objects.filter(pk=pk).update(**updates)
+                updated += 1
+        return updated
+
+    def _print_integrity_report(self, fixture_objects):
+        """Compare key model counts fixture vs DB after load."""
+        from django.apps import apps
+        from collections import Counter
+
+        fix_counts = Counter((o.get("model") or "").lower() for o in fixture_objects)
+        watch = [
+            "core.campus",
+            "core.organograma",
+            "core.unit",
+            "core.competenciaunidade",
+            "core.regimentocampus",
+            "core.resolucaoestruturaorganizacional",
+        ]
+        self.stdout.write("")
+        self.stdout.write("Integrity check (fixture vs database):")
+        problems = 0
+        for label in watch:
+            expected = fix_counts.get(label, 0)
+            if expected == 0:
+                continue
+            try:
+                app_label, model_code = label.split(".", 1)
+                model = apps.get_model(app_label, model_code)
+                actual = model.objects.count()
+            except Exception:
+                continue
+            # Campus may have extras from foundation (different siglas) — warn only if short
+            status = "OK" if actual >= expected else "SHORT"
+            if actual < expected:
+                problems += 1
+                self.stdout.write(
+                    self.style.WARNING(
+                        f"  {label}: fixture={expected} db={actual}  ← incomplete"
+                    )
+                )
+            else:
+                extra = f" (+{actual - expected} extra)" if actual > expected else ""
+                self.stdout.write(f"  {label}: fixture={expected} db={actual}{extra}  {status}")
+        if problems:
+            self.stdout.write(
+                self.style.WARNING(
+                    f"\n{problems} model(s) below fixture count. "
+                    "On a mixed DB, try a clean restore: delete var/db.sqlite3, "
+                    "migrate, then load_full_data (see docs/setup.md Opção B)."
+                )
+            )
+        else:
+            self.stdout.write(self.style.SUCCESS("  Core instance data matches the fixture."))
+
+    def _verify_media_files(self, fixture_objects):
+        """Warn if referenced media files are missing under MEDIA_ROOT."""
+        media_root = Path(settings.MEDIA_ROOT) if settings.MEDIA_ROOT else None
+        if not media_root:
+            self.stdout.write(
+                self.style.ERROR(
+                    "MEDIA_ROOT is not configured — PDF links will return 404."
+                )
+            )
+            return
+
+        fields_by_model = {
+            "core.regimentocampus": ["arquivo"],
+            "core.resolucaoestruturaorganizacional": ["arquivo"],
+            "core.organograma": [
+                "documento_aprovacao",
+                "regimento_arquivo",
+                "regimento_geral_arquivo",
+            ],
+        }
+        missing = []
+        checked = 0
+        for obj in fixture_objects:
+            model = (obj.get("model") or "").lower()
+            for field in fields_by_model.get(model, []):
+                rel = (obj.get("fields") or {}).get(field)
+                if not rel:
+                    continue
+                checked += 1
+                path = media_root / rel
+                if not path.exists():
+                    missing.append(str(rel))
+
+        if checked == 0:
+            return
+        if missing:
+            self.stdout.write(
+                self.style.WARNING(
+                    f"Media check: {len(missing)}/{checked} referenced file(s) missing under "
+                    f"{media_root}. Example: {missing[0]}"
+                )
+            )
+        else:
+            self.stdout.write(
+                self.style.SUCCESS(
+                    f"Media check: all {checked} referenced PDF/file path(s) present under "
+                    f"{media_root}."
+                )
+            )
+
+    def _sync_cargo_quotas_from_officials(self):
+        """
+        Rebuild CD/FG quota tables from official organogramas.
+
+        Fixture cotas use CargoFuncao PKs from the dump environment. After foundation
+        load (load_consup44_modelos) those PKs often differ, producing cards like
+        "CD-03: 4 / -" (used without registered limit). Syncing from the loaded
+        OFICIAL trees restores used/limit balance on the list cards.
+        """
+        from django.core.management import call_command
+
+        self.stdout.write("Sincronizando cotas de cargos a partir dos organogramas OFICIAIS...")
+        try:
+            call_command("sync_cargo_quotas", verbosity=self.verbosity)
+            self.stdout.write(self.style.SUCCESS("Cotas de cargos sincronizadas."))
+        except Exception as e:
+            self.stdout.write(
+                self.style.WARNING(
+                    f"Não foi possível sincronizar cotas automaticamente: {e}\n"
+                    "Rode manualmente: python manage.py sync_cargo_quotas"
+                )
+            )
+
+    def _remap_fields(self, obj_data, aggressive_null=False):
+        """Return a copy of obj_data with FKs remapped / optionally nulled."""
+        from django.apps import apps
+
+        data = deepcopy(obj_data)
+        model_name = data.get("model", "")
+        fields = data.get("fields") or {}
+
+        # Remap cargo / tipo FK fields (not free-text Unit.cargo_funcao CharField)
+        for field_name, mapping in (
+            ("cargo_funcao_ref", self._cargo_pk_map),
+            ("tipo_unidade", self._tipo_pk_map),
+        ):
+            if field_name in fields and fields[field_name] is not None:
+                fpk = fields[field_name]
+                if fpk in mapping:
+                    fields[field_name] = mapping[fpk]
+
+        # Through / quota models use cargo_funcao as FK to CargoFuncao
+        if model_name in (
+            "core.modeloreferencialcotacargo",
+            "core.campuscotacargo",
+        ):
+            cf = fields.get("cargo_funcao")
+            if cf in self._cargo_pk_map:
+                fields["cargo_funcao"] = self._cargo_pk_map[cf]
+
+        # Null optional FKs that still don't exist (Unit tree helpers)
+        model_l = (model_name or "").lower()
+        if model_l in ("core.unit", "core.unitmodelo") or aggressive_null:
+            self._null_missing_optional_fks(model_l, fields, aggressive_null)
+
+        data["fields"] = fields
+        return data
+
+    def _null_missing_optional_fks(self, model_name, fields, aggressive_null):
+        from core.models import (
+            CargoFuncao,
+            TipoUnidade,
+            Unit,
+            UnitModelo,
+        )
+
+        optional_checks = []
+        if model_name == "core.unit":
+            optional_checks = [
+                ("cargo_funcao_ref", CargoFuncao),
+                ("tipo_unidade", TipoUnidade),
+                ("origem_modelo", UnitModelo),
+                ("source_unit", Unit),
+            ]
+            if aggressive_null:
+                optional_checks.append(("unidade_pai", Unit))
+                # organograma is required — do not null
+        elif model_name == "core.unitmodelo":
+            optional_checks = [
+                ("cargo_funcao_ref", CargoFuncao),
+                ("tipo_unidade", TipoUnidade),
+            ]
+            if aggressive_null:
+                optional_checks.append(("unidade_pai", UnitModelo))
+
+        for field_name, model in optional_checks:
+            fk = fields.get(field_name)
+            if fk is not None and not model.objects.filter(pk=fk).exists():
+                fields[field_name] = None
+
     def _copy_media_files(self):
         src = settings.BASE_DIR / "data" / "media"
-        dst = settings.BASE_DIR / "var" / "media"
+        dst = Path(settings.MEDIA_ROOT)
 
         if not src.exists():
             self.stdout.write(
@@ -190,9 +663,18 @@ class Command(BaseCommand):
             )
             return
 
+        if not settings.MEDIA_ROOT:
+            self.stdout.write(
+                self.style.ERROR(
+                    "MEDIA_ROOT is empty — PDFs would not be served. "
+                    "Check config/settings (MEDIA_ROOT should point to var/media)."
+                )
+            )
+            return
+
         dst.mkdir(parents=True, exist_ok=True)
 
-        self.stdout.write("Copying media files (PDFs) from data/media/ to var/media/...")
+        self.stdout.write(f"Copying media files (PDFs) from data/media/ to {dst}...")
 
         copied = 0
         for root, dirs, files in os.walk(src):
@@ -208,7 +690,9 @@ class Command(BaseCommand):
 
         if copied > 0:
             self.stdout.write(
-                self.style.SUCCESS(f"Copied {copied} media file(s) into var/media/.")
+                self.style.SUCCESS(
+                    f"Copied {copied} media file(s) into MEDIA_ROOT ({dst})."
+                )
             )
         else:
             self.stdout.write("No media files found to copy.")

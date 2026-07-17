@@ -786,7 +786,9 @@
         }
     }
 
-    function updateCargoFieldsFromTipo() {
+    function updateCargoFieldsFromTipo(options) {
+        const opts = options || {};
+        const preserveCargo = !!opts.preserveCargo;
         const tipo = document.getElementById('id_tipo_unidade');
         const cargoRef = document.getElementById('id_cargo_funcao_ref');
         const cargoLivre = document.getElementById('div_cargo_custom');
@@ -798,13 +800,53 @@
         const defaultCargoId = option.dataset.cargoId || '';
         const defaultCargoName = option.dataset.cargo || '';
         const defaultSigla = option.dataset.sigla || '';
-        const allowsFreeCargo = option.dataset.cargoLivre === 'true';
+        const allowsCargoChoice = option.dataset.cargoLivre === 'true';
+        const allowedCargoIds = (option.dataset.cargoIds || '')
+            .split(',')
+            .map(s => s.trim())
+            .filter(Boolean);
 
-        if (cargoLivre) cargoLivre.style.display = allowsFreeCargo ? 'flex' : 'none';
-        if (cargoRef) cargoRef.value = defaultCargoId || '';
-        setCargoRefLocked(cargoRef, true);
-        if (cargoNome && defaultCargoName && (!allowsFreeCargo || !cargoNome.value)) cargoNome.value = defaultCargoName;
-        if (siglaCargo && defaultSigla && (!allowsFreeCargo || !siglaCargo.value)) siglaCargo.value = defaultSigla;
+        // Show free-text cargo fields only for true free-entry hybrid cases (no structured list)
+        // or when explicitly marked free without multi-CD list. Multi-choice CD types use the select.
+        if (cargoLivre) {
+            const multiStructured = allowedCargoIds.length > 1;
+            cargoLivre.style.display = (allowsCargoChoice && !multiStructured) ? 'flex' : 'none';
+        }
+
+        if (cargoRef) {
+            // Filter select options to allowed cargos when the type defines a list
+            Array.from(cargoRef.options).forEach(opt => {
+                if (!opt.value) return;
+                if (allowedCargoIds.length === 0) {
+                    opt.hidden = false;
+                    return;
+                }
+                opt.hidden = !allowedCargoIds.includes(String(opt.value));
+            });
+
+            const current = cargoRef.value ? String(cargoRef.value) : '';
+            const currentAllowed = current && (allowedCargoIds.length === 0 || allowedCargoIds.includes(current));
+            if (!preserveCargo || !currentAllowed) {
+                cargoRef.value = defaultCargoId || (allowedCargoIds[0] || '');
+            }
+            // Unlock when type allows choosing among multiple cargos (Diretoria CD-03/CD-04, etc.)
+            setCargoRefLocked(cargoRef, !allowsCargoChoice || allowedCargoIds.length <= 1);
+        }
+        if (cargoNome && defaultCargoName && (!allowsCargoChoice || !cargoNome.value)) cargoNome.value = defaultCargoName;
+        if (siglaCargo && defaultSigla && (!allowsCargoChoice || !siglaCargo.value)) {
+            // Prefer sigla of currently selected cargo when choice is allowed
+            if (allowsCargoChoice && cargoRef && cargoRef.selectedOptions && cargoRef.selectedOptions[0]) {
+                const label = cargoRef.selectedOptions[0].textContent || '';
+                const match = label.match(/\(([^)]+)\)\s*$/);
+                if (match) {
+                    siglaCargo.value = match[1];
+                } else if (!siglaCargo.value) {
+                    siglaCargo.value = defaultSigla;
+                }
+            } else if (!siglaCargo.value) {
+                siglaCargo.value = defaultSigla;
+            }
+        }
     }
 
     function bindFormRules() {
@@ -933,7 +975,8 @@
         setFieldValue('id_ligacao_indireta', node.ligacaoIndireta);
         setFieldValue('id_layout_filhos', node.layout_filhos || 'V');
         applyFlexibleOptionRules(node);
-        updateCargoFieldsFromTipo();
+        // Preserve cargo already on the node (e.g. Diretoria + CD-04 on small campuses)
+        updateCargoFieldsFromTipo({ preserveCargo: true });
 
         renderCompetencias(node);
         if (window.renderChart) window.renderChart();

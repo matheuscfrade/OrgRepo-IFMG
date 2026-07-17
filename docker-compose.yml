@@ -1,4 +1,14 @@
-version: '3.8'
+# OrgRepo — production-oriented stack (app + PostgreSQL)
+#
+# Usage:
+#   cp .env.example .env   # edit secrets
+#   docker compose up -d --build
+#
+# First deploy with full snapshot (once only):
+#   RUN_BOOTSTRAP=full docker compose up -d --build
+# Then remove RUN_BOOTSTRAP from .env and restart.
+#
+# See docs/deploy-docker.md
 
 services:
   db:
@@ -7,34 +17,54 @@ services:
     environment:
       POSTGRES_DB: ${POSTGRES_DB:-orgrepo}
       POSTGRES_USER: ${POSTGRES_USER:-orgrepo}
-      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-orgrepo_dev_password}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?Set POSTGRES_PASSWORD in .env}
     volumes:
       - postgres_data:/var/lib/postgresql/data
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-orgrepo}"]
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-orgrepo} -d ${POSTGRES_DB:-orgrepo}"]
       interval: 10s
       timeout: 5s
-      retries: 5
+      retries: 10
+      start_period: 10s
+    # Do not publish 5432 to the host in production unless TI requires it.
+    # ports:
+    #   - "5432:5432"
 
   web:
     build: .
-    command: >
-      sh -c "python manage.py migrate &&
-             python manage.py load_consup44_modelos &&
-             gunicorn --bind 0.0.0.0:8000 config.wsgi:application"
-    volumes:
-      - .:/app
-    ports:
-      - "8000:8000"
-    environment:
-      - DJANGO_SETTINGS_MODULE=config.settings.production
-      - DATABASE_URL=postgres://${POSTGRES_USER:-orgrepo}:${POSTGRES_PASSWORD:-orgrepo_dev_password}@db:5432/${POSTGRES_DB:-orgrepo}
-      - SECRET_KEY=${SECRET_KEY:-change-this-in-production}
-      - ALLOWED_HOSTS=${ALLOWED_HOSTS:-localhost,127.0.0.1}
+    restart: unless-stopped
     depends_on:
       db:
         condition: service_healthy
-    restart: unless-stopped
+    ports:
+      - "${WEB_PORT:-8000}:8000"
+    environment:
+      DJANGO_SETTINGS_MODULE: config.settings.production
+      DATABASE_URL: postgres://${POSTGRES_USER:-orgrepo}:${POSTGRES_PASSWORD}@db:5432/${POSTGRES_DB:-orgrepo}
+      SECRET_KEY: ${SECRET_KEY:?Set SECRET_KEY in .env}
+      ALLOWED_HOSTS: ${ALLOWED_HOSTS:-localhost,127.0.0.1}
+      CSRF_TRUSTED_ORIGINS: ${CSRF_TRUSTED_ORIGINS:-}
+      SECURE_SSL_REDIRECT: ${SECURE_SSL_REDIRECT:-False}
+      SESSION_COOKIE_SECURE: ${SESSION_COOKIE_SECURE:-False}
+      CSRF_COOKIE_SECURE: ${CSRF_COOKIE_SECURE:-False}
+      USE_X_FORWARDED_PROTO: ${USE_X_FORWARDED_PROTO:-True}
+      SERVE_MEDIA: ${SERVE_MEDIA:-True}
+      ALLOW_INSECURE_SECRET_KEY: ${ALLOW_INSECURE_SECRET_KEY:-0}
+      RUN_BOOTSTRAP: ${RUN_BOOTSTRAP:-}
+      GUNICORN_WORKERS: ${GUNICORN_WORKERS:-3}
+      GUNICORN_TIMEOUT: ${GUNICORN_TIMEOUT:-120}
+      LOG_LEVEL: ${LOG_LEVEL:-INFO}
+      DB_WAIT_SECONDS: ${DB_WAIT_SECONDS:-90}
+    volumes:
+      # Persist PDFs / uploads across container recreation
+      - media_data:/app/var/media
+    healthcheck:
+      test: ["CMD", "curl", "-fsS", "http://127.0.0.1:8000/"]
+      interval: 30s
+      timeout: 5s
+      retries: 5
+      start_period: 90s
 
 volumes:
   postgres_data:
+  media_data:

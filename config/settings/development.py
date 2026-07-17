@@ -1,3 +1,5 @@
+from pathlib import Path
+
 from .base import *
 
 DEBUG = True
@@ -6,7 +8,7 @@ ALLOWED_HOSTS = ['localhost', '127.0.0.1']
 # Ensure required directories exist (important after fresh clone)
 var_dir = BASE_DIR / 'var'
 var_dir.mkdir(exist_ok=True)
-(var_dir / 'media').mkdir(exist_ok=True)
+Path(MEDIA_ROOT).mkdir(parents=True, exist_ok=True)
 
 # Use SQLite by default for development
 DATABASES = {

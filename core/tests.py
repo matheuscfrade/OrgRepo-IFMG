@@ -39,6 +39,123 @@ from .services.governance import validate_organograma_governance
 from .views import _get_unidades_json_data
 
 
+class DiretoriaMultiCargoTests(TestCase):
+    """Diretoria may use CD-03 or CD-04 as Diretor(a) (small-campus CONSUP 44 models)."""
+
+    def setUp(self):
+        self.dim, _ = Dimensionamento.objects.get_or_create(
+            chave='40_26', defaults={'nome': 'Modelo 40/26'}
+        )
+        # May already exist after migration 0054 / load_consup44
+        self.cd03, _ = CargoFuncao.objects.get_or_create(nome='Diretor(a)', sigla='CD-03')
+        self.cd04_dir, _ = CargoFuncao.objects.get_or_create(nome='Diretor(a)', sigla='CD-04')
+        self.cd04_coord, _ = CargoFuncao.objects.get_or_create(nome='Coordenador(a)', sigla='CD-04')
+        for c in (self.cd03, self.cd04_dir, self.cd04_coord):
+            c.dimensionamentos_permitidos.add(self.dim)
+        self.tipo, _ = TipoUnidade.objects.get_or_create(
+            nome='Diretoria', defaults={'cargo_padrao': self.cd03}
+        )
+        if self.tipo.cargo_padrao_id != self.cd03.id:
+            self.tipo.cargo_padrao = self.cd03
+            self.tipo.save(update_fields=['cargo_padrao'])
+        self.tipo.dimensionamentos_permitidos.add(self.dim)
+        self.tipo.cargos_ocupantes_permitidos.set([self.cd03, self.cd04_dir])
+        self.campus, _ = Campus.objects.get_or_create(
+            sigla='CTT-IFMG',
+            defaults={
+                'nome': 'Campus Teste',
+                'dimensionamento': '40_26',
+                'dimensionamento_fk': self.dim,
+            },
+        )
+        self.org = Organograma.objects.create(campus=self.campus, status='RASCUNHO')
+
+    def test_tipo_allows_cd03_and_cd04_diretor(self):
+        ids = self.tipo.get_allowed_cargo_ids()
+        self.assertEqual(set(ids), {self.cd03.id, self.cd04_dir.id})
+        self.assertNotIn(self.cd04_coord.id, ids)
+        self.assertTrue(self.tipo.permite_escolha_entre_cargos)
+
+    def test_unit_form_accepts_diretoria_with_cd04_as_diretor(self):
+        form = UnitForm(
+            data={
+                'unidade_pai': '',
+                'tipo_unidade': self.tipo.id,
+                'cargo_funcao_ref': self.cd04_dir.id,
+                'cargo_funcao': '',
+                'sigla_cargo': 'CD-04',
+                'nome_unidade': 'Diretoria de Ensino',
+                'sigla_unidade': 'CTT-DE',
+                'ligacao_indireta': False,
+                'layout_filhos': 'V',
+            },
+            organograma_id=self.org.id,
+        )
+        self.assertTrue(form.is_valid(), form.errors)
+        unit = form.save(commit=False)
+        unit.organograma = self.org
+        unit.save()
+        unit.refresh_from_db()
+        self.assertEqual(unit.cargo_funcao_ref_id, self.cd04_dir.id)
+        self.assertEqual(unit.cargo_funcao_ref.nome, 'Diretor(a)')
+        self.assertEqual(unit.cargo_funcao_ref.sigla, 'CD-04')
+        self.assertEqual(unit.tipo_unidade_id, self.tipo.id)
+
+    def test_unit_form_rejects_coordenador_cd04_on_diretoria(self):
+        form = UnitForm(
+            data={
+                'unidade_pai': '',
+                'tipo_unidade': self.tipo.id,
+                'cargo_funcao_ref': self.cd04_coord.id,
+                'cargo_funcao': '',
+                'sigla_cargo': 'CD-04',
+                'nome_unidade': 'Diretoria de Ensino',
+                'sigla_unidade': 'CTT-DE',
+                'ligacao_indireta': False,
+                'layout_filhos': 'V',
+            },
+            organograma_id=self.org.id,
+        )
+        self.assertFalse(form.is_valid())
+        self.assertIn('cargo_funcao_ref', form.errors)
+
+    def test_unit_form_rejects_cargo_outside_allowed_list(self):
+        fg = CargoFuncao.objects.create(nome='Chefe', sigla='FG-01')
+        fg.dimensionamentos_permitidos.add(self.dim)
+        form = UnitForm(
+            data={
+                'unidade_pai': '',
+                'tipo_unidade': self.tipo.id,
+                'cargo_funcao_ref': fg.id,
+                'cargo_funcao': '',
+                'sigla_cargo': 'FG-01',
+                'nome_unidade': 'Diretoria de Ensino',
+                'sigla_unidade': 'CTT-DE',
+                'ligacao_indireta': False,
+                'layout_filhos': 'V',
+            },
+            organograma_id=self.org.id,
+        )
+        self.assertFalse(form.is_valid())
+        self.assertIn('cargo_funcao_ref', form.errors)
+
+    def test_load_consup44_builds_4026_diretoria_as_diretor_cd04(self):
+        from django.core.management import call_command
+
+        call_command('load_consup44_modelos')
+        dim = Dimensionamento.objects.get(chave='40_26')
+        modelo = ModeloReferencial.objects.filter(dimensionamento=dim).order_by('id').first()
+        self.assertIsNotNone(modelo)
+        diretorias = UnitModelo.objects.filter(
+            modelo=modelo,
+            tipo_unidade__nome='Diretoria',
+        ).select_related('cargo_funcao_ref')
+        self.assertTrue(diretorias.exists())
+        for um in diretorias:
+            self.assertEqual(um.cargo_funcao_ref.sigla, 'CD-04')
+            self.assertEqual(um.cargo_funcao_ref.nome, 'Diretor(a)')
+
+
 class ConfiguracaoCadastroTests(TestCase):
     def test_cargo_form_rejects_existing_nome_sigla_pair(self):
         CargoFuncao.objects.create(nome='Coordenador(a)', sigla='CD-04')
@@ -694,7 +811,8 @@ class GovernancaModeloReferencialTests(TestCase):
         self.assertContains(response, 'function setCargoRefLocked')
         self.assertContains(response, 'cargo-ref-locked')
         self.assertContains(response, 'dataset.lockedByTipo')
-        self.assertContains(response, 'setCargoRefLocked(cargoRef, true);')
+        self.assertContains(response, 'setCargoRefLocked(cargoRef, !allowsCargoChoice || allowedCargoIds.length <= 1)')
+        self.assertContains(response, 'preserveCargo')
         self.assertContains(response, 'builder-form-compact')
         self.assertContains(response, '.pending-badge')
         self.assertContains(response, '.node-box:hover .node-box-actions')

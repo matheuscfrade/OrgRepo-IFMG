@@ -2,7 +2,9 @@
 
 ## Passo a Passo Recomendado (Após Clonar)
 
-Este é o fluxo mais simples para começar a usar o sistema com a fundação limpa:
+Escolha **Opção A** (fundação limpa) **ou** **Opção B** (dados completos de demonstração).
+
+### Pré-requisitos comuns
 
 ```bash
 # 1. Clonar e entrar na pasta
@@ -15,27 +17,89 @@ python -m venv .venv
 
 # 3. Instalar dependências
 pip install -r requirements.txt
+```
 
-# 4. Preparar o banco de dados
+> **Windows**: se aparecer `No module named 'config.development'`, defina:
+> ```powershell
+> $env:DJANGO_SETTINGS_MODULE = "config.settings.development"
+> ```
+
+---
+
+### Opção A – Fundação limpa (padrão para forks)
+
+Sem organogramas reais de campus — apenas Resolução CONSUP 44 + campi básicos.
+
+```bash
 python manage.py migrate
-
-# 5. Carregar a fundação (Resolução 44 + Campi básicos)
 python manage.py load_consup44_modelos
-
-# 6. Criar usuário administrador
 python manage.py createsuperuser
-
-# 7. Rodar o servidor
 python manage.py runserver
 ```
 
-Acesse o admin em: [http://127.0.0.1:8000/admin/](http://127.0.0.1:8000/admin/)
+Acesse: [http://127.0.0.1:8000/](http://127.0.0.1:8000/)  
+Admin: [http://127.0.0.1:8000/admin/](http://127.0.0.1:8000/admin/)
 
-## 2. Banco de Dados
+---
 
-### Opção A - SQLite (Desenvolvimento Rápido)
+### Opção B – Dados completos (organogramas + regimentos + PDFs)
 
-### Opção B - PostgreSQL (Recomendado para Produção)
+Use o snapshot incluído em `data/full_data.json` e `data/media/`.
+
+**Ordem correta (importante):**
+
+```bash
+python manage.py migrate
+python manage.py load_full_data
+python manage.py load_consup44_modelos
+python manage.py sync_cargo_quotas
+python manage.py createsuperuser
+python manage.py runserver
+```
+
+| Passo | Por quê |
+|-------|---------|
+| `migrate` | Cria o schema (SQLite em `var/db.sqlite3`) |
+| `load_full_data` | Importa campi, organogramas, unidades, competências, regimentos e resoluções; copia PDFs para `var/media/`; sincroniza cotas CD/FG |
+| `load_consup44_modelos` | Reconstrói os **Modelos Referenciais** normativos da Resolução 44 (após o dump, para não misturar PKs) |
+| `sync_cargo_quotas` | Alinha cotas dos modelos/campus com os organogramas OFICIAIS (evita `CD-03: 4 / -` nos cards) |
+
+O `load_full_data` é resiliente a FKs auto-referenciais e a PKs de cargos/tipos diferentes, mas o fluxo acima evita conflitos e é o recomendado.
+
+#### Banco já populado / recomeçar do zero
+
+```bash
+# Windows PowerShell
+Remove-Item var\db.sqlite3 -ErrorAction SilentlyContinue
+# Opcional: limpar mídia local
+# Remove-Item var\media -Recurse -Force -ErrorAction SilentlyContinue
+
+python manage.py migrate
+python manage.py load_full_data
+python manage.py load_consup44_modelos
+python manage.py sync_cargo_quotas
+```
+
+#### PDFs (resoluções e portarias)
+
+- Arquivos do snapshot ficam em `data/media/` e são copiados para **`var/media/`** (`MEDIA_ROOT`).
+- Em desenvolvimento, o Django serve `/media/...` a partir de `MEDIA_ROOT` (ver `config/urls.py` + `DEBUG=True`).
+- Se um link de PDF retornar 404:
+  1. Confirme que rodou `load_full_data` (sem `--no-media`)
+  2. Confirme que `config.settings` define `MEDIA_ROOT = BASE_DIR / 'var' / 'media'`
+  3. Confirme que o arquivo existe em `var/media/...` com o mesmo caminho relativo do banco
+
+**Nota sobre o snapshot:** `full_data.json` foi gerado no desenvolvimento e **pode não representar a realidade atual do IFMG**. Serve como ambiente de demonstração.
+
+---
+
+## Banco de Dados
+
+### Opção SQLite (Desenvolvimento Rápido)
+
+Padrão em `config/settings/development.py` → `var/db.sqlite3`.
+
+### Opção PostgreSQL (Recomendado para Produção)
 
 1. Instale o PostgreSQL
 2. Crie o banco:
@@ -52,88 +116,62 @@ Acesse o admin em: [http://127.0.0.1:8000/admin/](http://127.0.0.1:8000/admin/)
 
 4. Rode as migrações normalmente.
 
-## 3. Carregando a Fundação (Padrão após clonar)
+---
 
-O comando principal é:
+## Comandos de Manutenção
 
-```bash
-python manage.py load_consup44_modelos
-```
-
-Esse comando agora carrega:
-- Dimensionamentos, Cargos e Tipos de Unidade
-- Os 6 Modelos Referenciais oficiais da Resolução CONSUP 44/2025
-- Regras de Alteração
-- **Lista básica de Campi** (incluindo Reitoria e principais campi do IFMG)
-
-Este é o estado recomendado para forks.
-
-## 4. Carregando Dados Completos (Estado com Dados Reais)
-
-Se você quiser restaurar um estado mais completo (com organogramas reais, regimentos, resoluções, etc.), é possível carregar um dump de dados completo.
-
-### Como gerar o arquivo de dados completo
-
-Em um ambiente que já possua dados reais (por exemplo, a partir de um backup antigo), rode:
-
-```bash
-python manage.py dump_full_data --output full_data.json
-```
-
-### Como carregar o arquivo de dados completo
-
-```bash
-python manage.py load_full_data
-```
-
-### ⚠️ Atenção Importante
-
-O arquivo `full_data.json` **foi gerado durante o desenvolvimento** do sistema e **pode não representar a realidade atual do IFMG**.
-
-- Os dados de organogramas, regimentos e resoluções refletem um momento específico do projeto.
-- Eles servem principalmente como **exemplo** de como um banco populado se comporta no sistema.
-- Após carregar esses dados, é recomendável revisá-los e atualizá-los conforme a realidade atual da instituição.
-
-**O comando `load_full_data` sobrescreve dados existentes.** Use com cautela e sempre a partir de um backup.
-
-## 4. Comandos de Manutenção
-
-### Carregar a fundação limpa (recomendado após clonar)
+### Fundação limpa (Resolução 44)
 
 ```bash
 python manage.py load_consup44_modelos
 ```
 
-### Opção B – Carregar dados completos (estado com organogramas reais)
-
-Se quiser restaurar um estado mais completo (com organogramas reais, regimentos, resoluções, etc.) que já vem incluído no repositório, rode simplesmente:
+### Dados completos de demonstração
 
 ```bash
 python manage.py load_full_data
 ```
 
-Isso carrega automaticamente `data/full_data.json` e copia os PDFs de `data/media/` para `var/media/`.
+Flags úteis:
 
-### Gerar o seu próprio arquivo de dados completo (avançado)
+```bash
+python manage.py load_full_data --only-oficial   # só organogramas OFICIAL
+python manage.py load_full_data --no-media       # não copiar PDFs
+python manage.py load_full_data -v 2             # detalhes de skips
+```
 
-Se você tiver um banco com dados reais e quiser gerar um novo `full_data.json`:
+### Gerar o seu próprio dump
+
+**Faça isso somente depois de finalizar as edições de organogramas** (o dump é o que a produção carrega).
 
 ```bash
 python manage.py dump_full_data --output data/full_data.json
+# Copie também os arquivos de MEDIA_ROOT para data/media/ se for versionar
+# Copy-Item var\media\* data\media\ -Recurse -Force
 ```
 
-### Limpar tudo e voltar apenas para a fundação 44
+Para deploy institucional com Docker + PostgreSQL, veja [deploy-docker.md](deploy-docker.md).
+
+### Voltar só à fundação 44
 
 ```bash
 python manage.py purge_instance_data --github-minimal --force
 python manage.py load_consup44_modelos
 ```
 
-## 5. Estrutura de Pastas Importante
+---
 
-- `var/db.sqlite3` → Banco principal
-- `var/manual_test/db.sqlite3` → Banco de testes manuais (sandbox)
-- `var/media/` → Arquivos enviados (regimentos, resoluções)
+## Estrutura de Pastas Importante
+
+| Caminho | Conteúdo |
+|---------|----------|
+| `var/db.sqlite3` | Banco principal (dev) |
+| `var/media/` | **MEDIA_ROOT** — PDFs servidos em `/media/` |
+| `data/full_data.json` | Snapshot opcional de dados completos |
+| `data/media/` | PDFs do snapshot (fonte para `load_full_data`) |
+| `var/manual_test/db.sqlite3` | Banco de testes manuais (sandbox) |
+
+---
 
 ## Usando Docker
 
@@ -159,28 +197,48 @@ docker-compose -f docker-compose.yml up --build
    docker-compose -f docker-compose.yml up -d --build
    ```
 
+---
+
 ## Dicas
 
-- Use o ambiente de teste manual (`scripts/run_manual_test_server.ps1`) para fazer alterações destrutivas sem afetar o banco principal.
-- O sistema foi projetado para que a **fundação normativa** (Resolução 44) seja separada dos dados reais dos campi.
+- Use o ambiente de teste manual (`scripts/run_manual_test_server.ps1`) para alterações destrutivas sem afetar o banco principal.
+- A **fundação normativa** (Resolução 44) fica separada dos dados reais dos campi.
+- Para demo completa, prefira **Opção B** na ordem documentada.
+
+---
 
 ## Problemas Comuns no Windows
 
-Se você receber o erro:
-
-```
-No module named 'config.development'
-```
-
-Isso costuma acontecer por causa de como o Python carrega os módulos no Windows. Rode os comandos definindo a variável de ambiente explicitamente:
+### `No module named 'config.development'`
 
 ```powershell
 $env:DJANGO_SETTINGS_MODULE = "config.settings.development"
 
-# Exemplos:
 .\.venv\Scripts\python.exe manage.py migrate
+.\.venv\Scripts\python.exe manage.py load_full_data
 .\.venv\Scripts\python.exe manage.py load_consup44_modelos
 .\.venv\Scripts\python.exe manage.py runserver
 ```
 
-Faça o mesmo para qualquer outro comando do Django.
+### PDFs de resoluções/portarias não abrem (404)
+
+1. `MEDIA_ROOT` deve ser `var/media` (já definido em `config/settings/base.py`).
+2. Rode `python manage.py load_full_data` para copiar de `data/media/`.
+3. Reinicie o `runserver` após mudar settings.
+4. Teste uma URL direta, por exemplo:  
+   `http://127.0.0.1:8000/media/regimentos_campus/CBA_PORTARIA_N214_DE_23_02_2023.pdf`
+
+### Unidades/cargos “faltando” após load_full_data
+
+Use a **Opção B** em banco limpo (`migrate` → `load_full_data` → `load_consup44_modelos` → `sync_cargo_quotas`).  
+O loader atual faz multi-pass e remapeia cargos/tipos, mas um DB misturado com tentativas antigas pode ficar inconsistente — nesse caso, apague `var/db.sqlite3` e recarregue.
+
+### Cards com `CD-03: 4 / -` (ou similar)
+
+Significa uso do cargo **sem cota cadastrada** no modelo/campus. Rode:
+
+```bash
+python manage.py sync_cargo_quotas
+```
+
+Isso redefine as cotas a partir dos organogramas oficiais carregados.

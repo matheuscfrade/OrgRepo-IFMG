@@ -351,6 +351,18 @@ class TipoUnidade(models.Model):
     nome = models.CharField("Tipo de Departamento", max_length=100)
     cargo_padrao = models.ForeignKey(CargoFuncao, on_delete=models.SET_NULL, null=True, blank=True, verbose_name="Cargo Ocupante Padrão")
     dimensionamentos_permitidos = models.ManyToManyField(Dimensionamento, blank=True, verbose_name="Dimensionamentos Autorizados")
+    # When set, the unit form may choose among these cargos (e.g. Diretoria: CD-03 and CD-04
+    # for small campuses under Resolução CONSUP 44/2025 models 40/26 and 70/45).
+    cargos_ocupantes_permitidos = models.ManyToManyField(
+        CargoFuncao,
+        blank=True,
+        related_name='tipos_unidade_como_ocupante',
+        verbose_name="Cargos ocupantes permitidos",
+        help_text=(
+            "Lista de cargos/funções aceitos para este tipo. Se vazia, vale apenas o cargo padrão. "
+            "Ex.: Diretoria pode permitir CD-03 (Diretor) e CD-04 (Coordenador) nos campi menores."
+        ),
+    )
     selecao_cargo_livre = models.BooleanField(
         default=False,
         verbose_name="Permite Seleção Livre de Cargo",
@@ -377,6 +389,36 @@ class TipoUnidade(models.Model):
     def is_generico_pendente(self):
         nome_upper = (self.nome or "").upper()
         return "SETOR OU SEÇÃO" in nome_upper or "SETOR OU SECAO" in nome_upper
+
+    def get_allowed_cargo_ids(self):
+        """
+        Cargo IDs acceptable for units of this type.
+
+        Priority:
+        1. Explicit cargos_ocupantes_permitidos (plus cargo_padrao if set)
+        2. selecao_cargo_livre / genérico pendente → FG-01 and FG-02
+        3. cargo_padrao alone
+        """
+        explicit_ids = list(self.cargos_ocupantes_permitidos.values_list('id', flat=True))
+        if explicit_ids:
+            ids = set(explicit_ids)
+            if self.cargo_padrao_id:
+                ids.add(self.cargo_padrao_id)
+            return sorted(ids)
+        if self.selecao_cargo_livre or self.is_generico_pendente:
+            return list(
+                CargoFuncao.objects.filter(sigla__in=['FG-01', 'FG-02'])
+                .order_by('sigla', 'id')
+                .values_list('id', flat=True)
+            )
+        if self.cargo_padrao_id:
+            return [self.cargo_padrao_id]
+        return []
+
+    @property
+    def permite_escolha_entre_cargos(self):
+        """True when the builder should unlock the cargo select (more than one option)."""
+        return len(self.get_allowed_cargo_ids()) > 1
 
 
 class Unit(models.Model):

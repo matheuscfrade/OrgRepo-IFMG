@@ -31,6 +31,13 @@
                             {% else %}
                                 <em style="color: #bdc3c7;">Não informado</em>
                             {% endif %}
+                            {% with extras=tipo.cargos_ocupantes_permitidos.all %}
+                            {% if extras %}
+                                <div style="font-size: 0.75rem; color: #95a5a6; margin-top: 2px;">
+                                    Também: {% for c in extras %}{{ c.sigla }}{% if not forloop.last %}, {% endif %}{% endfor %}
+                                </div>
+                            {% endif %}
+                            {% endwith %}
                         </td>
                         <td style="padding: 12px 10px; text-align: center;">
                             <a href="{% url 'tipo_unidade_editar' tipo.id %}" style="color: #3498db; text-decoration: none;" title="Editar"><i class="fa-solid fa-pen"></i></a>

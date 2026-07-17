@@ -71,8 +71,10 @@ USE_TZ = True
 STATIC_URL = '/static/'
 STATIC_ROOT = BASE_DIR / 'staticfiles'
 
-# Media files
+# Media files (PDFs de regimentos, resoluções, documentos de aprovação)
+# Stored under var/ so the repo root stays clean and matches load_full_data copy target.
 MEDIA_URL = '/media/'
+MEDIA_ROOT = BASE_DIR / 'var' / 'media'
 
 # Default primary key field type
 DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'

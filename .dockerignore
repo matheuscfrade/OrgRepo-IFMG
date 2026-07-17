@@ -1,57 +1,45 @@
-# Python
-__pycache__/
-*.py[cod]
-*$py.class
-*.so
-.Python
-build/
-develop-eggs/
-dist/
-downloads/
-eggs/
-.eggs/
-lib/
-lib64/
-parts/
-sdist/
-var/
-wheels/
-*.egg-info/
-.installed.cfg
-*.egg
+# Build context for production image — keep lean and free of secrets/runtime junk
 
-# Virtual environments
-.venv/
-venv/
-ENV/
-env/
-
-# Git
-.git/
+.git
 .gitignore
+.venv
+venv
+ENV
+env
 
-# IDE
-.idea/
-.vscode/
-*.swp
-*.swo
-
-# Environment & secrets
+# Local runtime / secrets
 .env
 .env.*
 !.env.example
-
-# Logs and local data
-*.log
 var/
 staticfiles/
-media/
+*.sqlite3
+db.sqlite3
 
-# Docker
-Dockerfile
-docker-compose*.yml
-.dockerignore
-
-# OS
+# Dev / IDE / OS
+.idea
+.vscode
+*.swp
+*~
 .DS_Store
 Thumbs.db
+__pycache__
+*.py[cod]
+*.egg-info
+.mypy_cache
+.pytest_cache
+.coverage
+htmlcov
+
+# Agent / local caches
+.antigravitycli
+.codex_tmp
+.gemini
+brain
+.grok
+
+# Docs not required at runtime (keep README if useful; optional)
+# docs/
+
+# Note: data/ and data/media/ ARE included so RUN_BOOTSTRAP=full can load the snapshot.
+# Rebuild the image after regenerating data/full_data.json.

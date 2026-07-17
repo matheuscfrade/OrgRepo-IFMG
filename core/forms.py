@@ -313,14 +313,13 @@ class TipoUnidadeSelect(forms.Select):
                     option['attrs']['data-cargo'] = tipo.cargo_padrao.nome
                     option['attrs']['data-sigla'] = tipo.cargo_padrao.sigla
                     option['attrs']['data-cargo-id'] = tipo.cargo_padrao.id
-                if tipo.selecao_cargo_livre or tipo.is_generico_pendente:
+                allowed_ids = tipo.get_allowed_cargo_ids()
+                if allowed_ids:
+                    option['attrs']['data-cargo-ids'] = ','.join(str(i) for i in allowed_ids)
+                # Unlock cargo select when more than one cargo is valid for this type
+                # (e.g. Diretoria: CD-03 and CD-04) or legacy free-selection FG types.
+                if tipo.permite_escolha_entre_cargos or tipo.selecao_cargo_livre or tipo.is_generico_pendente:
                     option['attrs']['data-cargo-livre'] = 'true'
-                    from .models import CargoFuncao
-                    fg_ids = list(
-                        CargoFuncao.objects.filter(sigla__in=['FG-01', 'FG-02'])
-                        .values_list('id', flat=True)
-                    )
-                    option['attrs']['data-cargo-ids'] = ','.join(str(i) for i in fg_ids)
             except (TipoUnidade.DoesNotExist, TypeError, ValueError):
                 pass
         return option
@@ -444,9 +443,21 @@ class UnitForm(forms.ModelForm):
                 self.add_error('tipo_unidade', "Selecione um tipo permitido pela regra de resolução desta unidade do modelo.")
             if cargo_ref and cargo_ids and cargo_ref.id not in cargo_ids:
                 self.add_error('cargo_funcao_ref', "Selecione um cargo permitido pela regra de resolução desta unidade do modelo.")
-            if tipo and cargo_ref and tipo.cargo_padrao_id and not tipo.selecao_cargo_livre and cargo_ref.id != tipo.cargo_padrao_id:
-                self.add_error('cargo_funcao_ref', f"Para o tipo '{tipo.nome}', o cargo deve ser '{tipo.cargo_padrao.sigla}'.")
-            
+
+        # Cargo must be among the type's allowed occupants (padrao and/or extras like CD-04 for Diretoria)
+        if tipo and cargo_ref:
+            allowed_ids = set(tipo.get_allowed_cargo_ids())
+            if allowed_ids and cargo_ref.id not in allowed_ids:
+                allowed_siglas = list(
+                    CargoFuncao.objects.filter(id__in=allowed_ids)
+                    .order_by('sigla')
+                    .values_list('sigla', flat=True)
+                )
+                self.add_error(
+                    'cargo_funcao_ref',
+                    f"Para o tipo '{tipo.nome}', o cargo deve ser um de: {', '.join(allowed_siglas) or '—'}."
+                )
+
         # 3. Validação Cruzada: Nome vs Tipo (Evitar selecionar Setor e escrever Seção)
         tipo_nome = tipo.nome.upper()
         if "SETOR" in tipo_nome and "SEÇÃO" in nome_upper:
@@ -550,11 +561,14 @@ class UnitModeloForm(forms.ModelForm):
             if not tipos:
                 self.add_error('tipos_resolucao_permitidos', 'Informe ao menos um tipo permitido para a resolução desta unidade.')
             if tipos:
-                required_cargos = []
+                required_cargo_ids = []
                 missing_defaults = []
                 for tipo in tipos:
-                    if tipo.cargo_padrao_id:
-                        required_cargos.append(tipo.cargo_padrao)
+                    allowed = tipo.get_allowed_cargo_ids()
+                    if allowed:
+                        required_cargo_ids.extend(allowed)
+                    elif tipo.cargo_padrao_id:
+                        required_cargo_ids.append(tipo.cargo_padrao_id)
                     elif not tipo.selecao_cargo_livre:
                         missing_defaults.append(tipo.nome)
 
@@ -564,9 +578,9 @@ class UnitModeloForm(forms.ModelForm):
                         'Os seguintes tipos precisam ter cargo padrão definido para uso na resolução flexível: ' + ', '.join(missing_defaults) + '.'
                     )
 
-                if required_cargos:
+                if required_cargo_ids:
                     cleaned_data['cargos_resolucao_permitidos'] = CargoFuncao.objects.filter(
-                        id__in=[cargo.id for cargo in required_cargos]
+                        id__in=sorted(set(required_cargo_ids))
                     )
                 elif not cargos:
                     self.add_error('cargos_resolucao_permitidos', 'Informe ao menos um cargo permitido para a resolução desta unidade.')
@@ -607,12 +621,30 @@ class CargoFuncaoForm(forms.ModelForm):
 class TipoUnidadeForm(forms.ModelForm):
     class Meta:
         model = TipoUnidade
-        fields = ['nome', 'cargo_padrao', 'dimensionamentos_permitidos', 'selecao_cargo_livre', 'apenas_modelo_referencial']
+        fields = [
+            'nome',
+            'cargo_padrao',
+            'cargos_ocupantes_permitidos',
+            'dimensionamentos_permitidos',
+            'selecao_cargo_livre',
+            'apenas_modelo_referencial',
+        ]
         widgets = {
             'nome': forms.TextInput(attrs={'class': 'form-control', 'placeholder': 'Ex: Campus'}),
             'cargo_padrao': forms.Select(attrs={'class': 'form-control'}),
+            'cargos_ocupantes_permitidos': forms.CheckboxSelectMultiple(),
             'dimensionamentos_permitidos': forms.CheckboxSelectMultiple(),
         }
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        if 'cargos_ocupantes_permitidos' in self.fields:
+            self.fields['cargos_ocupantes_permitidos'].queryset = CargoFuncao.objects.order_by('sigla', 'nome')
+            self.fields['cargos_ocupantes_permitidos'].required = False
+            self.fields['cargos_ocupantes_permitidos'].help_text = (
+                "Opcional. Se informado, o builder permite escolher entre esses cargos "
+                "(ex.: Diretoria com CD-03 e CD-04). O cargo padrão continua sendo o preenchimento inicial."
+            )
 
     def clean_nome(self):
         nome = (self.cleaned_data.get('nome') or '').strip()

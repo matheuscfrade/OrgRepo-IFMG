@@ -806,11 +806,15 @@ def organograma_build(request, pk):
             unit = form.save(commit=False)
             unit.organograma = organograma
             
-            # Automação/Invasão automática de Cargo Padrão (se não informado)
-            if unit.tipo_unidade and unit.tipo_unidade.cargo_padrao and not unit.cargo_funcao_ref and not (unit.origem_modelo and unit.origem_modelo.has_flexible_resolution):
-                unit.cargo_funcao_ref = unit.tipo_unidade.cargo_padrao
-            if unit.tipo_unidade and unit.tipo_unidade.cargo_padrao and not unit.tipo_unidade.selecao_cargo_livre and unit.origem_modelo and unit.origem_modelo.has_flexible_resolution:
-                unit.cargo_funcao_ref = unit.tipo_unidade.cargo_padrao
+            # Auto-fill cargo padrao only when empty and the type does not offer a multi-cargo choice
+            # (e.g. Diretoria may keep CD-04 on small campuses — do not overwrite with CD-03).
+            if unit.tipo_unidade and unit.tipo_unidade.cargo_padrao and not unit.cargo_funcao_ref:
+                multi_choice = unit.tipo_unidade.permite_escolha_entre_cargos
+                flexible = unit.origem_modelo and unit.origem_modelo.has_flexible_resolution
+                if not multi_choice and not flexible:
+                    unit.cargo_funcao_ref = unit.tipo_unidade.cargo_padrao
+                elif flexible and not unit.tipo_unidade.selecao_cargo_livre and not multi_choice:
+                    unit.cargo_funcao_ref = unit.tipo_unidade.cargo_padrao
 
             if not unit_instance: # Apenas se for nova caixinha
                 from django.db.models import Max
@@ -1842,8 +1846,14 @@ def _duplicated_modelo_referencial_build(request, pk):
             unit = form.save(commit=False)
             unit.modelo = modelo
             
-            # Auto-fill cargo_padrao se não informado
-            if unit.tipo_unidade and unit.tipo_unidade.cargo_padrao and not unit.cargo_funcao_ref and not form.cleaned_data.get('permite_resolucao_flexivel'):
+            # Auto-fill cargo padrao only when empty and type is single-cargo
+            if (
+                unit.tipo_unidade
+                and unit.tipo_unidade.cargo_padrao
+                and not unit.cargo_funcao_ref
+                and not form.cleaned_data.get('permite_resolucao_flexivel')
+                and not unit.tipo_unidade.permite_escolha_entre_cargos
+            ):
                 unit.cargo_funcao_ref = unit.tipo_unidade.cargo_padrao
 
             if not unit_instance:
@@ -2027,8 +2037,14 @@ def modelo_referencial_build(request, pk):
             unit = form.save(commit=False)
             unit.modelo = modelo
             
-            # Auto-fill cargo_padrao se não informado
-            if unit.tipo_unidade and unit.tipo_unidade.cargo_padrao and not unit.cargo_funcao_ref and not form.cleaned_data.get('permite_resolucao_flexivel'):
+            # Auto-fill cargo padrao only when empty and type is single-cargo
+            if (
+                unit.tipo_unidade
+                and unit.tipo_unidade.cargo_padrao
+                and not unit.cargo_funcao_ref
+                and not form.cleaned_data.get('permite_resolucao_flexivel')
+                and not unit.tipo_unidade.permite_escolha_entre_cargos
+            ):
                 unit.cargo_funcao_ref = unit.tipo_unidade.cargo_padrao
 
             if not unit_instance:
