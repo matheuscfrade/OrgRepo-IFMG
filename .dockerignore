@@ -41,5 +41,4 @@ brain
 # Docs not required at runtime (keep README if useful; optional)
 # docs/
 
-# Note: data/ and data/media/ ARE included so RUN_BOOTSTRAP=full can load the snapshot.
-# Rebuild the image after regenerating data/full_data.json.
+# data/ and data/media/ are included so RUN_BOOTSTRAP=full can load the snapshot.

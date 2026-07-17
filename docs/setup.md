@@ -89,7 +89,7 @@ python manage.py sync_cargo_quotas
   2. Confirme que `config.settings` define `MEDIA_ROOT = BASE_DIR / 'var' / 'media'`
   3. Confirme que o arquivo existe em `var/media/...` com o mesmo caminho relativo do banco
 
-**Nota sobre o snapshot:** `full_data.json` foi gerado no desenvolvimento e **pode não representar a realidade atual do IFMG**. Serve como ambiente de demonstração.
+**Nota sobre o snapshot:** `full_data.json` é um ponto no tempo dos organogramas e documentos incluídos no repositório. Atualize-o com `dump_full_data` quando a estrutura institucional mudar.
 
 ---
 
@@ -165,45 +165,33 @@ python manage.py load_consup44_modelos
 
 | Caminho | Conteúdo |
 |---------|----------|
-| `var/db.sqlite3` | Banco principal (dev) |
+| `var/db.sqlite3` | Banco principal (desenvolvimento local) |
 | `var/media/` | **MEDIA_ROOT** — PDFs servidos em `/media/` |
-| `data/full_data.json` | Snapshot opcional de dados completos |
+| `data/full_data.json` | Snapshot de dados completos (opcional) |
 | `data/media/` | PDFs do snapshot (fonte para `load_full_data`) |
-| `var/manual_test/db.sqlite3` | Banco de testes manuais (sandbox) |
 
 ---
 
-## Usando Docker
+## Docker
 
-### Desenvolvimento com Docker
+Para subir a aplicação com PostgreSQL em ambiente institucional, use o guia dedicado:
+
+**[deploy-docker.md](deploy-docker.md)**
+
+Resumo:
 
 ```bash
-# Subir com hot-reload (usa SQLite por padrão)
-docker-compose up --build
-
-# Subir com PostgreSQL (mais próximo de produção)
-docker-compose -f docker-compose.yml up --build
+cp .env.example .env   # preencher SECRET_KEY e POSTGRES_PASSWORD
+docker compose up -d --build
 ```
-
-### Produção com Docker
-
-1. Configure as variáveis no `.env`:
-   - `SECRET_KEY`
-   - `ALLOWED_HOSTS`
-   - `DATABASE_URL` (ou use as variáveis individuais do Postgres)
-
-2. Rode:
-   ```bash
-   docker-compose -f docker-compose.yml up -d --build
-   ```
 
 ---
 
 ## Dicas
 
-- Use o ambiente de teste manual (`scripts/run_manual_test_server.ps1`) para alterações destrutivas sem afetar o banco principal.
-- A **fundação normativa** (Resolução 44) fica separada dos dados reais dos campi.
-- Para demo completa, prefira **Opção B** na ordem documentada.
+- A **fundação normativa** (Resolução 44) fica separada dos dados dos campi no snapshot.
+- Para ambiente completo com organogramas, prefira a **Opção B** na ordem documentada.
+- Não versionar `var/`, `.env` nem bancos locais.
 
 ---
 

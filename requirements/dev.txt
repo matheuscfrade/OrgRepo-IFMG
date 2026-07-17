@@ -23,6 +23,3 @@ django-debug-toolbar>=4.4
 # Nice-to-have for development
 # django-extensions>=3.2
 # werkzeug>=3.0   # for better runserver (if using extensions)
-
-# Windows-specific (only if you use the old manual_test_*.ps1 scripts from archive)
-# (none needed - we document the pattern in docs/development.md instead)

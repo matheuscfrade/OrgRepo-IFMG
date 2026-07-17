@@ -1,33 +1,15 @@
 """
 Management command: purge_instance_data
 
-Safely removes data to prepare a clean starting point.
+Remove dados de instância para recomeçar com a fundação da Resolução CONSUP 44.
 
-By default it removes concrete "instance" data (Organogramas, Units, Solicitações)
-while trying to preserve foundation.
+Por padrão remove organogramas, unidades e solicitações, preservando a fundação.
 
-When using --github-minimal (recommended for GitHub preparation):
+Com --github-minimal / --resolucao-44-only: deixa apenas a fundação normativa
+(dimensionamentos, cargos, tipos, modelos referenciais e regras), removendo
+campi, regimentos, resoluções e organogramas.
 
-It aggressively cleans everything except the pure "Resolução CONSUP 44/2025"
-normative foundation:
-
-- Dimensionamentos
-- Cargos e Funções (CargoFuncao) + their allowed dimensionamentos
-- Tipos de Unidade + defaults
-- The 6 official Modelos Referenciais + their full UnitModelo trees (137 units)
-- RegrasAlteracaoModelo + cotas for those models
-
-It removes:
-- All Campi
-- All RegimentoCampus (records + will clean related media)
-- All ResolucaoEstruturaOrganizacional (records + media)
-- All Organogramas, Units, Solicitações, etc.
-
-This gives forks a completely free starting point based only on the current
-official rules (Resolução 44), without any outdated campus registrations,
-regimentos, or resolutions.
-
-The command is conservative and has strong dry-run protection.
+Sempre use dry-run antes de --force em ambiente com dados reais.
 """
 
 from django.core.management.base import BaseCommand, CommandError

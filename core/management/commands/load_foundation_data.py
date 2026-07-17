@@ -1,26 +1,18 @@
 """
 Management command: load_foundation_data
 
-Loads (or ensures) the institutional "foundation" data.
+Carrega a fundação institucional básica (quando aplicável).
 
-By default it tries to load a reasonable baseline including Campi.
-
-When preparing a **minimal GitHub snapshot**, you normally do **not** need this
-command for Campi/Regimentos/Resoluções — instead run:
+Para a fundação normativa da Resolução CONSUP 44/2025 (modelos referenciais,
+cargos, tipos, regras), prefira:
 
     python manage.py load_consup44_modelos
 
-This loads exactly the Resolução CONSUP 44/2025 artifacts:
-- Dimensionamentos
-- Cargos e Funções
-- Tipos de Unidade
-- The 6 official Modelos Referenciais + 137 UnitModelos
-- RegrasAlteracaoModelo + cotas
+Para ambiente completo com organogramas do snapshot:
 
-Then use `purge_instance_data --github-minimal --force` (on a copy of your DB)
-to remove everything else (Campi, Regimentos, Resoluções, organogramas...).
-
-This gives forks a completely free starting point based only on the current rules.
+    python manage.py load_full_data
+    python manage.py load_consup44_modelos
+    python manage.py sync_cargo_quotas
 """
 
 from django.core.management.base import BaseCommand

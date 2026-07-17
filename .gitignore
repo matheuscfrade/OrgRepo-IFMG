@@ -88,8 +88,12 @@ var/manual_test/
 !data/media/**
 var/
 
-# One-off / archived dev scripts (kept in scripts/archive/ but ignored for cleanliness)
+# Internal/dev-only caches and scratch (never ship to GitHub)
+data/media/_sync_ifmg/
+docs/estudo_*.md
+scripts/estudo_*.py
 scripts/archive/
+org_debug_*.json
 
 # -----------------------------------------------------------------------------
 # Docker / Container

@@ -1,9 +1,8 @@
 # OrgRepo - Repositório de Organogramas do IFMG
 
-> **⚠️ Protótipo em desenvolvimento**  
-> Este repositório está em estado de protótipo. O objetivo é permitir que a equipe de TI do IFMG faça fork e continue o desenvolvimento, especialmente integrando o sistema de autenticação e logging institucional.
-
 Sistema para gerenciamento de estruturas organizacionais (organogramas), modelos referenciais, solicitações de alteração e governança conforme a Resolução CONSUP nº 44/2025.
+
+**Entrega para a TI:** o repositório já inclui aplicação, stack Docker (app + PostgreSQL), snapshot de dados e PDFs. Guia de deploy: **[docs/deploy-docker.md](docs/deploy-docker.md)**.
 
 ## ⚠️ Configurações em Camadas (Importante para Windows)
 
@@ -31,17 +30,11 @@ Este sistema foi desenvolvido para o Instituto Federal de Minas Gerais (IFMG) co
 - Controlar alterações através de um motor de governança rigoroso (cotas de flexibilização, regras de alteração, etc.)
 - Gerenciar o fluxo completo de solicitações de alteração (Rascunho → Análise → CONSUP)
 
-## Estado Atual do Repositório (GitHub)
+## Conteúdo do repositório
 
-Este repositório está configurado para conter **a fundação normativa** da Resolução CONSUP 44/2025:
-
-- Dimensionamentos
-- Cargos e Funções
-- Tipos de Unidade
-- Os 6 Modelos Referenciais oficiais + suas 137 caixas (UnitModelos)
-- Regras de Alteração (RegrasAlteracaoModelo) e cotas
-
-Além disso, o repositório inclui opcionalmente o snapshot `data/full_data.json` + PDFs em `data/media/` para quem quiser um ambiente de demonstração com organogramas reais.
+- **Aplicação Django** e modelos da Resolução CONSUP 44/2025 (dimensionamentos, cargos, tipos de unidade, modelos referenciais, regras de alteração)
+- **Snapshot** `data/full_data.json` + PDFs em `data/media/` (organogramas oficiais, regimentos e resoluções)
+- **Deploy** com Docker Compose (web + PostgreSQL) — ver [docs/deploy-docker.md](docs/deploy-docker.md)
 
 ## Como Iniciar (Após Clonar)
 
@@ -89,8 +82,8 @@ O que cada comando faz aqui:
 3. `sync_cargo_quotas` — re-sincroniza cotas após reconstruir os modelos (evita cards `CD-03: 4 / -`).
 
 > **Importante**
-> - `data/full_data.json` é um snapshot de desenvolvimento e **pode não refletir a situação atual do IFMG**.
-> - PDFs só abrem se `MEDIA_ROOT` apontar para `var/media` (já configurado em `config/settings`) e se `load_full_data` tiver copiado os arquivos.
+> - `data/full_data.json` é o snapshot versionado no repositório (ponto no tempo).
+> - PDFs só abrem se `MEDIA_ROOT` apontar para `var/media` (já configurado) e se `load_full_data` tiver copiado os arquivos.
 > - Em Windows, defina `$env:DJANGO_SETTINGS_MODULE = "config.settings.development"` se necessário.
 
 Para gerar o seu próprio dump a partir de outro banco:
@@ -123,38 +116,16 @@ Admin: [http://127.0.0.1:8000/admin/](http://127.0.0.1:8000/admin/)
 | `python manage.py load_full_data` | Restaura dump completo (`data/full_data.json` + PDFs → `var/media/`) |
 | `python manage.py purge_instance_data --github-minimal --force` | Remove dados de campi/organogramas (mantém fundação 44) |
 
-## Fluxo de Desenvolvimento Recomendado (Para Forks e Contribuidores)
+## Arquitetura técnica
 
-- O **estado padrão** após clonar é a **fundação limpa** (Opção A).
-- Para demo com organogramas reais, use a **Opção B** na ordem documentada (`load_full_data` → `load_consup44_modelos`).
-- Siga o estilo de código existente.
-- Atualize a documentação quando necessário.
-- Abra Pull Requests para contribuir.
+- **Backend:** Django 6
+- **Banco:** SQLite (desenvolvimento local) / PostgreSQL (produção via Docker Compose)
+- **Frontend:** Templates Django + JavaScript (D3.js no construtor de organogramas)
+- **Mídia:** `MEDIA_ROOT = var/media/` (regimentos, resoluções e documentos de aprovação)
 
-Obrigado por contribuir!
-
-## Arquitetura Técnica
-
-- **Backend**: Django 6
-- **Banco de dados**: SQLite (desenvolvimento) / PostgreSQL (produção recomendado)
-- **Frontend**: Templates Django + JavaScript (D3.js no construtor de organogramas)
-- **Mídia**: `MEDIA_ROOT = var/media/` (regimentos, resoluções e documentos de aprovação)
-
-## Preparação para Produção (Docker + PostgreSQL)
+## Produção (Docker + PostgreSQL)
 
 Guia completo: **[docs/deploy-docker.md](docs/deploy-docker.md)**
-
-### Ordem importante
-
-1. **Atualizar organogramas e documentos no ambiente de desenvolvimento** (ainda não “fechar” o dump).
-2. Gerar snapshot fresco: `dump_full_data` + PDFs em `data/media/`.
-3. Subir stack Docker (app + PostgreSQL).
-4. Bootstrap **one-shot** dos dados (`RUN_BOOTSTRAP=full` ou comandos manuais).
-5. Remover a flag de bootstrap e operar com backups dos volumes.
-
-Não use o `full_data.json` antigo se ainda houver mudanças pendentes nos organogramas.
-
-### Subir localmente a stack de produção (smoke test)
 
 ```bash
 cp .env.example .env
@@ -164,31 +135,24 @@ docker compose up -d --build
 docker compose exec web python manage.py createsuperuser
 ```
 
-A aplicação fica em http://localhost:8000
+A aplicação fica em http://localhost:8000 (ou na porta definida em `WEB_PORT`).
 
 O Compose sobe:
+
 - PostgreSQL 16 (volume `postgres_data`)
 - Django/Gunicorn (volume `media_data` para PDFs)
 - `migrate` + `collectstatic` no entrypoint
-- Bootstrap de dados **somente** se `RUN_BOOTSTRAP` estiver definido
+- Bootstrap de dados **somente** se `RUN_BOOTSTRAP` estiver definido (use só na primeira carga)
+
+## Integrações futuras (TI)
+
+Itens típicos a evoluir no ambiente institucional:
+
+- Autenticação institucional (SSO, LDAP, etc.)
+- Logging no padrão IFMG
+- Proxy HTTPS / domínio corporativo
+- Política de backup dos volumes Docker
 
 ## Licença
 
 Uso interno do IFMG.
-
----
-
-**Nota**: Este repositório foi preparado para ser compartilhado de forma limpa. A fundação normativa (Resolução 44) está separada dos dados institucionais reais.
-
----
-
-## Para a Equipe de TI do IFMG (Fork & Continuação)
-
-Este protótipo foi limpo intencionalmente para facilitar o fork. O que falta / é esperado que a equipe implemente:
-
-- Integração com o sistema de autenticação institucional (SSO, LDAP, etc.)
-- Logging no formato padrão do IFMG
-- Possivelmente migração para PostgreSQL em produção
-- Ajustes de segurança e variáveis de ambiente para o ambiente corporativo
-
-Sinta-se à vontade para fazer fork e evoluir o projeto a partir da fundação atual (Resolução CONSUP 44/2025).

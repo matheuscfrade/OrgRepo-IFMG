@@ -2,51 +2,18 @@
 
 Este guia descreve como subir o **OrgRepo** no servidor com **Docker Compose** (app + PostgreSQL).
 
-## Ordem crítica dos trabalhos
+O repositório já inclui o snapshot `data/full_data.json` e os PDFs em `data/media/`. Na **primeira** subida, carregue esses dados uma única vez; nas atualizações de código, **não** recarregue o snapshot se o banco de produção já estiver em uso.
+
+## Fluxo recomendado
 
 ```
-1. Finalizar organogramas e documentos no ambiente de DESENVOLVIMENTO
-2. Gerar dump atualizado (full_data + PDFs)
-3. Validar stack Docker localmente
-4. Entregar à TI / subir no servidor
-5. Bootstrap ONE-SHOT dos dados (só na primeira carga)
-6. Remover flag de bootstrap e operar normalmente
+1. Clonar o repositório no servidor
+2. Configurar .env (secrets, hosts)
+3. docker compose up -d --build
+4. Bootstrap ONE-SHOT dos dados (só na primeira carga)
+5. Criar superusuário
+6. Remover flag de bootstrap e operar normalmente (backups dos volumes)
 ```
-
-**Não faça o bootstrap de produção com `data/full_data.json` antigo** se ainda houver mudanças pendentes nos organogramas. O snapshot versionado no repositório é um ponto no tempo; ele deve ser **regenerado depois** das suas atualizações.
-
-### Checklist antes do dump definitivo
-
-- [ ] Organogramas oficiais revisados/ajustados no app de desenvolvimento
-- [ ] Cargos/tipos/cotas coerentes (incluindo Diretoria CD-04 como Diretor nos campi 40/26 e 70/45, se aplicável)
-- [ ] PDFs de regimentos/resoluções corretos em `var/media/`
-- [ ] Smoke test manual no `runserver` local
-
-### Gerar o snapshot para produção
-
-No ambiente de desenvolvimento (após as atualizações):
-
-```powershell
-$env:DJANGO_SETTINGS_MODULE = "config.settings.development"
-.\.venv\Scripts\activate
-
-# Cotas alinhadas aos oficiais (recomendado)
-python manage.py sync_cargo_quotas
-
-# Dump do banco
-python manage.py dump_full_data --output data/full_data.json
-
-# Garantir que data/media/ reflete os PDFs atuais (se necessário, copiar de var/media)
-# Exemplo PowerShell:
-# Copy-Item -Path var\media\* -Destination data\media\ -Recurse -Force
-```
-
-Em seguida, versionar ou entregar à TI:
-
-- `data/full_data.json`
-- `data/media/**` (PDFs)
-
-Rebuild da imagem Docker **depois** desse dump (o snapshot entra no contexto da imagem).
 
 ---
 
