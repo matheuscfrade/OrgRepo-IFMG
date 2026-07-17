@@ -223,7 +223,7 @@
                 </select>
             </div>
             <div class="filter-field">
-                <label for="filter-versao">Versao</label>
+                <label for="filter-versao">Versão</label>
                 <input id="filter-versao" name="versao" value="{{ request.GET.versao }}" placeholder="v1, v2, v3">
             </div>
             <div class="filter-field">
@@ -238,7 +238,7 @@
                 <label for="filter-documento">Documento</label>
                 <select id="filter-documento" name="documento">
                     <option value="">Todos</option>
-                    <option value="resolucao" {% if request.GET.documento == 'resolucao' %}selected{% endif %}>Resolucao</option>
+                    <option value="resolucao" {% if request.GET.documento == 'resolucao' %}selected{% endif %}>Resolução</option>
                     <option value="regimento_interno" {% if request.GET.documento == 'regimento_interno' %}selected{% endif %}>Regimento interno</option>
                     <option value="regimento_geral" {% if request.GET.documento == 'regimento_geral' %}selected{% endif %}>Regimento geral</option>
                 </select>
@@ -246,8 +246,8 @@
             <div class="filter-field">
                 <label for="filter-ordenar">Ordenar</label>
                 <select id="filter-ordenar" name="ordenar_historico">
-                    <option value="">Versao mais recente</option>
-                    <option value="versao_antiga" {% if request.GET.ordenar_historico == 'versao_antiga' %}selected{% endif %}>Versao mais antiga</option>
+                    <option value="">Versão mais recente</option>
+                    <option value="versao_antiga" {% if request.GET.ordenar_historico == 'versao_antiga' %}selected{% endif %}>Versão mais antiga</option>
                     <option value="data_recente" {% if request.GET.ordenar_historico == 'data_recente' %}selected{% endif %}>Data mais recente</option>
                     <option value="data_antiga" {% if request.GET.ordenar_historico == 'data_antiga' %}selected{% endif %}>Data mais antiga</option>
                 </select>

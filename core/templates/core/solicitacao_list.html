@@ -234,7 +234,7 @@
 <div class="animate-fade">
     <div class="list-header">
         <a href="{% url 'solicitacao_create_select' %}" class="btn-primary">
-            <i class="fa-solid fa-plus"></i> Nova Solicitacao
+            <i class="fa-solid fa-plus"></i> Nova Solicitação
         </a>
     </div>
     <form method="get" class="filter-panel">
@@ -248,9 +248,9 @@
                 <select id="filter-status" name="status">
                     <option value="">Todos</option>
                     <option value="RASCUNHO" {% if request.GET.status == 'RASCUNHO' %}selected{% endif %}>Rascunho</option>
-                    <option value="EM_ANALISE" {% if request.GET.status == 'EM_ANALISE' %}selected{% endif %}>Em analise</option>
+                    <option value="EM_ANALISE" {% if request.GET.status == 'EM_ANALISE' %}selected{% endif %}>Em análise</option>
                     <option value="ENVIADO_CONSUP" {% if request.GET.status == 'ENVIADO_CONSUP' %}selected{% endif %}>Enviado ao CONSUP</option>
-                    <option value="DEVOLVIDO_CORRECAO" {% if request.GET.status == 'DEVOLVIDO_CORRECAO' %}selected{% endif %}>Devolvido para correcao</option>
+                    <option value="DEVOLVIDO_CORRECAO" {% if request.GET.status == 'DEVOLVIDO_CORRECAO' %}selected{% endif %}>Devolvido para correção</option>
                     <option value="APROVADO" {% if request.GET.status == 'APROVADO' %}selected{% endif %}>Aprovado</option>
                     <option value="REJEITADO" {% if request.GET.status == 'REJEITADO' %}selected{% endif %}>Rejeitado</option>
                 </select>
@@ -287,9 +287,9 @@
                 <label for="filter-proposta">Proposta</label>
                 <select id="filter-proposta" name="proposta">
                     <option value="">Todas</option>
-                    <option value="com_resolucao" {% if request.GET.proposta == 'com_resolucao' %}selected{% endif %}>Com resolucao</option>
-                    <option value="sem_resolucao" {% if request.GET.proposta == 'sem_resolucao' %}selected{% endif %}>Sem resolucao</option>
-                    <option value="resolucao_diferente" {% if request.GET.proposta == 'resolucao_diferente' %}selected{% endif %}>Resolucao diferente</option>
+                    <option value="com_resolucao" {% if request.GET.proposta == 'com_resolucao' %}selected{% endif %}>Com resolução</option>
+                    <option value="sem_resolucao" {% if request.GET.proposta == 'sem_resolucao' %}selected{% endif %}>Sem resolução</option>
+                    <option value="resolucao_diferente" {% if request.GET.proposta == 'resolucao_diferente' %}selected{% endif %}>Resolução diferente</option>
                 </select>
             </div>
             <div class="filter-field">

@@ -340,13 +340,13 @@
                 <label for="filter-documento">Documento</label>
                 <select id="filter-documento" name="documento">
                     <option value="">Todos</option>
-                    <option value="resolucao" {% if request.GET.documento == 'resolucao' %}selected{% endif %}>Resolucao</option>
+                    <option value="resolucao" {% if request.GET.documento == 'resolucao' %}selected{% endif %}>Resolução</option>
                     <option value="regimento_interno" {% if request.GET.documento == 'regimento_interno' %}selected{% endif %}>Regimento interno</option>
                     <option value="regimento_geral" {% if request.GET.documento == 'regimento_geral' %}selected{% endif %}>Regimento geral</option>
                 </select>
             </div>
             <div class="filter-field">
-                <label for="filter-doc-status">Situacao documental</label>
+                <label for="filter-doc-status">Situação documental</label>
                 <select id="filter-doc-status" name="doc_status">
                     <option value="">Todas</option>
                     <option value="com_documento" {% if request.GET.doc_status == 'com_documento' %}selected{% endif %}>Com documento/link</option>
@@ -355,7 +355,7 @@
             </div>
             {% if request.user.is_authenticated %}
             <div class="filter-field">
-                <label for="filter-status">Situacao</label>
+                <label for="filter-status">Situação</label>
                 <select id="filter-status" name="status">
                     <option value="">Todas</option>
                     <option value="oficial" {% if request.GET.status == 'oficial' %}selected{% endif %}>Oficial</option>
@@ -372,12 +372,12 @@
                 </select>
             </div>
             <div class="filter-field">
-                <label for="filter-pendencia">Pendencia</label>
+                <label for="filter-pendencia">Pendência</label>
                 <select id="filter-pendencia" name="pendencia">
                     <option value="">Todas</option>
-                    <option value="adequacao_modelo" {% if request.GET.pendencia == 'adequacao_modelo' %}selected{% endif %}>Adequacao ao modelo</option>
-                    <option value="competencias" {% if request.GET.pendencia == 'competencias' %}selected{% endif %}>Competencias pendentes</option>
-                    <option value="unidades_genericas" {% if request.GET.pendencia == 'unidades_genericas' %}selected{% endif %}>Unidades genericas</option>
+                    <option value="adequacao_modelo" {% if request.GET.pendencia == 'adequacao_modelo' %}selected{% endif %}>Adequação ao modelo</option>
+                    <option value="competencias" {% if request.GET.pendencia == 'competencias' %}selected{% endif %}>Competências pendentes</option>
+                    <option value="unidades_genericas" {% if request.GET.pendencia == 'unidades_genericas' %}selected{% endif %}>Unidades genéricas</option>
                 </select>
             </div>
             {% endif %}
