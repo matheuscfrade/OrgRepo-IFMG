@@ -99,6 +99,7 @@ class Command(BaseCommand):
         )
 
     def handle(self, *args, **options):
+        self.verbosity = options.get('verbosity', 1)
         fixture_path = Path(options["file"])
         if not fixture_path.is_absolute():
             fixture_path = settings.BASE_DIR / fixture_path
