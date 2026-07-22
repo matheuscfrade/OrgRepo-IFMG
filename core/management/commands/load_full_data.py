@@ -113,6 +113,15 @@ class Command(BaseCommand):
 
         self.stdout.write(f"Loading full data from {fixture_path}...")
 
+        # Suppress RegimentoCampus → organograma auto-versioning while importing
+        # the snapshot (avoids creating extra OFICIAL rows / PK drift mid-load).
+        connection._orgrepo_loading_fixture = True
+        try:
+            self._handle_load(fixture_path, options)
+        finally:
+            connection._orgrepo_loading_fixture = False
+
+    def _handle_load(self, fixture_path, options):
         # Read the fixture with tolerant encoding.
         # The current full_data.json was generated on Windows and uses cp1252/latin-1.
         try:
@@ -222,9 +231,10 @@ class Command(BaseCommand):
         self.stdout.write(f"  Skipped (conflicts/unresolvable FKs): {skipped}")
         if errors:
             self.stdout.write(self.style.WARNING(f"  Errors:   {errors}"))
-        if skip_reasons and options.get("verbosity", 1) >= 2:
+        # Always show skip reasons when something failed (not only with -v 2)
+        if skip_reasons and skipped:
             self.stdout.write("  Top skip reasons:")
-            for reason, count in skip_reasons.most_common(15):
+            for reason, count in skip_reasons.most_common(20):
                 self.stdout.write(f"    [{count}] {reason}")
 
         expected_core = sum(
@@ -245,26 +255,32 @@ class Command(BaseCommand):
                 "Use a clean database: migrate, then load_full_data (docs/setup.md Opção B)."
             )
 
+        # Copy PDFs/media even if integrity fails later — otherwise a partial
+        # import leaves the DB without documents and links return 404.
+        if not options.get("no_media"):
+            self._copy_media_files()
+            self._verify_media_files(fixture_objects)
+
+        # Always reset sequences after explicit-PK inserts — even on partial load.
+        # Otherwise the next create/get_or_create (e.g. load_consup44_modelos)
+        # can hit duplicate PK on PostgreSQL (sequence still at 1 while rows use 2..N).
+        self._reset_postgres_sequences(fixture_objects)
+
         problems = self._print_integrity_report(fixture_objects)
         if problems:
             raise CommandError(
                 f"{problems} core model(s) below fixture count after load. "
                 "Bootstrap aborted so the app does not start half-loaded. "
-                "Fix the database/fixture and retry."
+                "Media/PDF copy and sequence reset were attempted above. "
+                "Wipe the database volume and retry on a clean DB, or run with "
+                "-v 2 and inspect 'Top skip reasons'. "
+                "Recommended: docker compose down -v && docker compose up -d --build"
             )
-
-        # Postgres: reset sequences after explicit-PK inserts (like loaddata).
-        self._reset_postgres_sequences(fixture_objects)
 
         # Align cargo quotas with official organogramas (avoids "CD-03: 4 / -")
         # Fixture cotas often use different CargoFuncao PKs than the foundation.
         # Docker path runs sync again after load_consup44_modelos (authoritative).
         self._sync_cargo_quotas_from_officials()
-
-        # Copy media files (PDFs of regimentos, resoluções, etc.)
-        if not options.get("no_media"):
-            self._copy_media_files()
-            self._verify_media_files(fixture_objects)
 
         if options.get("only_oficial"):
             self.stdout.write(
@@ -530,7 +546,10 @@ class Command(BaseCommand):
             else:
                 extra = f" (+{actual - expected} extra)" if actual > expected else ""
                 self.stdout.write(f"  {label}: fixture={expected} db={actual}{extra}  {status}")
+
+        # Detail missing organogramas / resoluções (most useful when a whole campus fails)
         if problems:
+            self._print_missing_core_pks(fixture_objects)
             self.stdout.write(
                 self.style.WARNING(
                     f"\n{problems} model(s) below fixture count."
@@ -539,6 +558,38 @@ class Command(BaseCommand):
         else:
             self.stdout.write(self.style.SUCCESS("  Core instance data matches the fixture."))
         return problems
+
+    def _print_missing_core_pks(self, fixture_objects):
+        """List fixture PKs absent from DB for organograma and resolução."""
+        from core.models import Campus, Organograma, ResolucaoEstruturaOrganizacional
+
+        for label, model, campus_field in (
+            ("core.organograma", Organograma, "campus_id"),
+            ("core.resolucaoestruturaorganizacional", ResolucaoEstruturaOrganizacional, "campus_id"),
+        ):
+            want = {
+                o.get("pk"): (o.get("fields") or {}).get("campus")
+                for o in fixture_objects
+                if (o.get("model") or "").lower() == label and o.get("pk") is not None
+            }
+            if not want:
+                continue
+            have = set(model.objects.filter(pk__in=want.keys()).values_list("pk", flat=True))
+            missing = sorted(set(want.keys()) - have)
+            if not missing:
+                continue
+            self.stdout.write(self.style.WARNING(f"  Missing {label} pk(s): {missing}"))
+            for pk in missing[:10]:
+                campus_pk = want.get(pk)
+                sigla = ""
+                if campus_pk:
+                    sigla = (
+                        Campus.objects.filter(pk=campus_pk)
+                        .values_list("sigla", flat=True)
+                        .first()
+                        or f"campus_id={campus_pk}"
+                    )
+                self.stdout.write(f"    - pk={pk} campus={sigla}")
 
     def _reset_postgres_sequences(self, fixture_objects):
         """Reset PK sequences after explicit-PK inserts (PostgreSQL only)."""
@@ -676,6 +727,18 @@ class Command(BaseCommand):
             cf = fields.get("cargo_funcao")
             if cf in self._cargo_pk_map:
                 fields["cargo_funcao"] = self._cargo_pk_map[cf]
+
+        # Empty string is invalid for FileField / often breaks deserialize on Postgres
+        for key, value in list(fields.items()):
+            if value == "" and (
+                "arquivo" in key
+                or key in (
+                    "documento_aprovacao",
+                    "regimento_arquivo",
+                    "regimento_geral_arquivo",
+                )
+            ):
+                fields[key] = None
 
         # Null optional FKs that still don't exist (Unit tree helpers)
         model_l = (model_name or "").lower()

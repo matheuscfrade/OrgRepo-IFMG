@@ -1,5 +1,7 @@
-﻿from django.core.management.base import BaseCommand
-from django.db import transaction
+﻿from django.apps import apps
+from django.core.management.base import BaseCommand
+from django.core.management.color import no_style
+from django.db import IntegrityError, connection, transaction
 
 from core.models import (
     Campus,
@@ -23,6 +25,7 @@ DIMENSIONAMENTOS = {
     '70_45': 'Modelo 70/45',
     '40_26': 'Modelo 40/26',
     'POLO': 'Polo de Inovação',
+    'REITORIA': 'Reitoria',
 }
 
 CARGOS = {
@@ -268,10 +271,14 @@ class Command(BaseCommand):
     help = 'Carrega os modelos referenciais da Resolução CONSUP 44/2025.'
 
     def handle(self, *args, **options):
+        # After load_full_data (explicit PKs), Postgres sequences may lag behind.
+        # Reset before any create/get_or_create to avoid duplicate PK errors.
+        self._reset_core_sequences()
+
         with transaction.atomic():
             dimensions = self.ensure_dimensionamentos()
-            cargos = self.ensure_cargos(dimensions.values())
-            tipos = self.ensure_tipos(cargos, dimensions.values())
+            cargos = self.ensure_cargos(list(dimensions.values()))
+            tipos = self.ensure_tipos(cargos, list(dimensions.values()))
             total = 0
             for chave, root in MODELOS.items():
                 modelo = self.ensure_modelo(chave, dimensions[chave])
@@ -284,7 +291,25 @@ class Command(BaseCommand):
             # Also load basic Campi as part of the foundation
             self.ensure_basic_campi(dimensions)
 
+        # UnitModelo bulk create also advances sequences — keep them aligned.
+        self._reset_core_sequences()
+
         self.stdout.write(self.style.SUCCESS(f'Modelos referenciais carregados: {len(MODELOS)} modelos, {total} unidades.'))
+
+    def _reset_core_sequences(self):
+        """Reset PostgreSQL PK sequences for core models (no-op on SQLite)."""
+        if connection.vendor != 'postgresql':
+            return
+        models = list(apps.get_app_config('core').get_models())
+        style = no_style()
+        sql_list = connection.ops.sequence_reset_sql(style, models)
+        if not sql_list:
+            return
+        with connection.cursor() as cursor:
+            for sql in sql_list:
+                cursor.execute(sql)
+        if self.verbosity >= 2:
+            self.stdout.write(f'PostgreSQL sequences reset ({len(sql_list)} statement(s)).')
 
     def ensure_dimensionamentos(self):
         result = {}
@@ -297,7 +322,14 @@ class Command(BaseCommand):
         """Create/update a single CargoFuncao by (nome, sigla) without clobbering siblings."""
         cargo = CargoFuncao.objects.filter(sigla=sigla, nome=nome).order_by('id').first()
         if not cargo:
-            cargo = CargoFuncao.objects.create(sigla=sigla, nome=nome)
+            try:
+                cargo = CargoFuncao.objects.create(sigla=sigla, nome=nome)
+            except IntegrityError:
+                # Sequence lag or concurrent create — retry lookup / force sequence once.
+                self._reset_core_sequences()
+                cargo = CargoFuncao.objects.filter(sigla=sigla, nome=nome).order_by('id').first()
+                if not cargo:
+                    cargo = CargoFuncao.objects.create(sigla=sigla, nome=nome)
         cargo.dimensionamentos_permitidos.add(*dimensionamentos)
         return cargo
 
@@ -403,7 +435,12 @@ class Command(BaseCommand):
         return count
 
     def ensure_basic_campi(self, dimensions):
-        """Creates the basic list of IFMG Campi as part of the foundation data."""
+        """Creates the basic list of IFMG Campi as part of the foundation data.
+
+        After load_full_data the snapshot already has campi (often with different
+        siglas, e.g. COP-IFMG vs CBMG-OPR). We only create missing foundation
+        rows and never crash the whole CONSUP load on a single campus error.
+        """
         campi_data = [
             ("IFMG - Reitoria", "IFMG", "REITORIA"),
             ("Campus Betim", "CBMG-BET", "150"),
@@ -430,16 +467,38 @@ class Command(BaseCommand):
         created = 0
         for nome, sigla, dim_chave in campi_data:
             dim = dimensions.get(dim_chave)
-            campus, was_created = Campus.objects.get_or_create(
-                sigla=sigla,
-                defaults={
-                    "nome": nome,
-                    "dimensionamento": dim_chave,
-                    "dimensionamento_fk": dim,
-                },
-            )
-            if was_created:
+            campus = Campus.objects.filter(sigla=sigla).order_by('id').first()
+            if campus:
+                updated = False
+                if dim and campus.dimensionamento_fk_id is None:
+                    campus.dimensionamento_fk = dim
+                    updated = True
+                if dim_chave and not campus.dimensionamento:
+                    campus.dimensionamento = dim_chave
+                    updated = True
+                if updated:
+                    campus.save()
+                continue
+
+            try:
+                with transaction.atomic():
+                    Campus.objects.create(
+                        sigla=sigla,
+                        nome=nome,
+                        dimensionamento=dim_chave,
+                        dimensionamento_fk=dim,
+                    )
                 created += 1
+            except IntegrityError as exc:
+                # Typical after partial load_full_data without sequence reset.
+                self._reset_core_sequences()
+                if Campus.objects.filter(sigla=sigla).exists():
+                    continue
+                self.stdout.write(
+                    self.style.WARNING(
+                        f"  Could not create campus {sigla}: {exc}. Skipping."
+                    )
+                )
 
         if created:
             self.stdout.write(f"  {created} Campi created as part of foundation.")

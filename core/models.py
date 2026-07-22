@@ -1,7 +1,6 @@
-﻿from django.db import models
+﻿from django.db import connection, models, transaction
 from django.contrib.auth.models import User
 from django.core.validators import MinValueValidator
-from django.db import transaction
 from django.utils import timezone
 from django.db.models.signals import post_save
 from django.dispatch import receiver
@@ -113,7 +112,9 @@ class RegimentoCampus(models.Model):
             )
             RegimentoCampus.objects.filter(campus=self.campus, tipo=self.tipo, vigente=True).exclude(pk=self.pk).update(vigente=False)
         super().save(*args, **kwargs)
-        if self.vigente:
+        # During fixture load (load_full_data), skip auto-versioning of organogramas:
+        # the snapshot already contains the intended OFICIAL trees and PKs.
+        if self.vigente and not getattr(connection, "_orgrepo_loading_fixture", False):
             _versionar_organograma_oficial_por_novo_regimento(self, regimentos_vigentes_anteriores)
 
     def __str__(self):
