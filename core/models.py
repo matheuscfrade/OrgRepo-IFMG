@@ -83,7 +83,13 @@ class RegimentoCampus(models.Model):
     nome = models.CharField("Nome do Regimento", max_length=255)
     numero = models.CharField("Número/Ato", max_length=100, blank=True, default="")
     data_publicacao = models.DateField("Data de Publicação", null=True, blank=True)
-    arquivo = models.FileField("Arquivo do Regimento", upload_to='regimentos_campus/', null=True, blank=True)
+    arquivo = models.FileField(
+        "Arquivo do Regimento",
+        upload_to='regimentos_campus/',
+        null=True,
+        blank=True,
+        max_length=255,
+    )
     link = models.URLField("Link do Regimento", max_length=500, null=True, blank=True)
     vigente = models.BooleanField("Regimento Vigente", default=False)
     observacoes = models.TextField("Observações", blank=True, default="")
@@ -133,7 +139,13 @@ class ResolucaoEstruturaOrganizacional(models.Model):
     nome = models.CharField("Resolução da Estrutura Organizacional", max_length=255)
     numero = models.CharField("Número/Ato", max_length=100, blank=True, default="")
     data_publicacao = models.DateField("Data de Publicação", null=True, blank=True)
-    arquivo = models.FileField("Arquivo da Resolução", upload_to='documentos_aprovacao/', null=True, blank=True)
+    arquivo = models.FileField(
+        "Arquivo da Resolução",
+        upload_to='documentos_aprovacao/',
+        null=True,
+        blank=True,
+        max_length=255,
+    )
     link = models.URLField("Link da Resolução", max_length=500, null=True, blank=True)
     observacoes = models.TextField("Observações", blank=True, default="")
     criada_em = models.DateTimeField(auto_now_add=True)
@@ -160,13 +172,31 @@ class Organograma(models.Model):
     ]
     campus = models.ForeignKey(Campus, on_delete=models.CASCADE, related_name='organogramas')
     data_vigencia = models.DateField(null=True, blank=True)
-    documento_aprovacao = models.FileField(upload_to='documentos_aprovacao/', null=True, blank=True, verbose_name="Arquivo da Resolução")
+    documento_aprovacao = models.FileField(
+        upload_to='documentos_aprovacao/',
+        null=True,
+        blank=True,
+        max_length=255,
+        verbose_name="Arquivo da Resolução",
+    )
     nome_documento_aprovacao = models.CharField(max_length=255, null=True, blank=True, verbose_name="Número/Nome da Resolução")
     resolucao_estrutura = models.ForeignKey(ResolucaoEstruturaOrganizacional, on_delete=models.SET_NULL, null=True, blank=True, related_name='organogramas', verbose_name="Resolução da Estrutura Organizacional")
     nome_regimento = models.CharField(max_length=255, null=True, blank=True, verbose_name="Nome do Regimento Interno")
-    regimento_arquivo = models.FileField(upload_to='regimentos/', null=True, blank=True, verbose_name="Arquivo do Regimento Interno")
+    regimento_arquivo = models.FileField(
+        upload_to='regimentos/',
+        null=True,
+        blank=True,
+        max_length=255,
+        verbose_name="Arquivo do Regimento Interno",
+    )
     nome_regimento_geral = models.CharField(max_length=255, null=True, blank=True, verbose_name="Nome do Regimento Geral")
-    regimento_geral_arquivo = models.FileField(upload_to='regimentos_gerais/', null=True, blank=True, verbose_name="Arquivo do Regimento Geral")
+    regimento_geral_arquivo = models.FileField(
+        upload_to='regimentos_gerais/',
+        null=True,
+        blank=True,
+        max_length=255,
+        verbose_name="Arquivo do Regimento Geral",
+    )
     regimento_referencia = models.ForeignKey(RegimentoCampus, on_delete=models.SET_NULL, null=True, blank=True, related_name='organogramas', verbose_name="Regimento de Referência")
     regimento_geral_referencia = models.ForeignKey(RegimentoCampus, on_delete=models.SET_NULL, null=True, blank=True, related_name='organogramas_regimento_geral', verbose_name="Regimento Geral de Referência")
     status = models.CharField(max_length=20, choices=STATUS_CHOICES, default='RASCUNHO')
