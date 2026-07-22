@@ -271,6 +271,7 @@ class Command(BaseCommand):
     help = 'Carrega os modelos referenciais da Resolução CONSUP 44/2025.'
 
     def handle(self, *args, **options):
+        self.verbosity = options.get('verbosity', 1)
         # After load_full_data (explicit PKs), Postgres sequences may lag behind.
         # Reset before any create/get_or_create to avoid duplicate PK errors.
         self._reset_core_sequences()
